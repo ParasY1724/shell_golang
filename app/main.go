@@ -10,6 +10,9 @@ func main() {
 	for true {
 		fmt.Print("$ ")
 		fmt.Scan(&cmd)
+		if cmd == "exit"{
+			break
+		}
 		fmt.Println(cmd + ": command not found")
 	}
 }
