@@ -7,7 +7,9 @@ import (
 
 func main() {
 	var cmd string
-	fmt.Print("$ ")
-	fmt.Scan(&cmd)
-	fmt.Println(cmd + ": command not found")
+	for true {
+		fmt.Print("$ ")
+		fmt.Scan(&cmd)
+		fmt.Println(cmd + ": command not found")
+	}
 }
