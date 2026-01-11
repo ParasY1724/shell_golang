@@ -42,13 +42,24 @@ func init() {
 			fmt.Println(dir)
 		},
 		"cd" : func(args []string) {
-			if _,err := os.Stat(args[0]) ; os.IsNotExist(err){
-				fmt.Printf("cd: %s: No such file or directory\n",args[0])
+			if len(args) == 0 {
+				fmt.Fprintln(os.Stderr, "cd: missing argument")
 				return
 			}
-			err := os.Chdir(args[0])
+		
+			info, err := os.Stat(args[0])
 			if err != nil {
-				println(err)
+				fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", args[0])
+				return
+			}
+		
+			if !info.IsDir() {
+				fmt.Fprintf(os.Stderr, "cd: %s: Not a directory\n", args[0])
+				return
+			}
+		
+			if err := os.Chdir(args[0]); err != nil {
+				fmt.Fprintln(os.Stderr, err)
 			}
 		},
 	}
