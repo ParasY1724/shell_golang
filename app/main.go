@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"path/filepath"
 )
 
 var knownCmds map[string]func([]string)
@@ -25,9 +26,30 @@ func init() {
 			cmd := args[0]
 			if _, ok := knownCmds[cmd]; ok {
 				fmt.Printf("%s is a shell builtin\n", cmd)
-			} else {
-				fmt.Printf("%s: not found\n", cmd)
+				return
+			} 
+			pathEnv := os.Getenv("PATH")
+			dirs := strings.Split(pathEnv, string(os.PathListSeparator))
+
+			for _, dir := range dirs {
+				if dir == "" {
+					continue
+				}
+
+				fullPath := filepath.Join(dir, cmd)
+				info, err := os.Stat(fullPath)
+				if err != nil {
+					continue 
+				}
+
+				// Check if it's a regular file and executable
+				if info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
+					fmt.Printf("%s is %s\n", cmd, fullPath)
+					return
+				}
 			}
+
+			fmt.Printf("%s: not found\n", cmd)			
 		},
 	}
 }
