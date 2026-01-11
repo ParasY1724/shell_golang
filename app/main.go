@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"path/filepath"
+	"os/exec"
 )
 
 var knownCmds map[string]func([]string)
@@ -26,30 +26,12 @@ func init() {
 			cmd := args[0]
 			if _, ok := knownCmds[cmd]; ok {
 				fmt.Printf("%s is a shell builtin\n", cmd)
-				return
-			} 
-			pathEnv := os.Getenv("PATH")
-			dirs := strings.Split(pathEnv, string(os.PathListSeparator))
-
-			for _, dir := range dirs {
-				if dir == "" {
-					continue
-				}
-
-				fullPath := filepath.Join(dir, cmd)
-				info, err := os.Stat(fullPath)
-				if err != nil {
-					continue 
-				}
-
-				// Check if it's a regular file and executable
-				if info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
-					fmt.Printf("%s is %s\n", cmd, fullPath)
-					return
-				}
-			}
-
-			fmt.Printf("%s: not found\n", cmd)			
+				
+			} else if execPath, err := exec.LookPath(cmd); err == nil {
+				fmt.Printf("%s is %s\n",cmd,execPath)
+			} else {
+				fmt.Printf("%s: not found\n",cmd)
+			}		
 		},
 	}
 }
@@ -76,6 +58,14 @@ func main() {
 
 		if fn, ok := knownCmds[cmd]; ok {
 			fn(args)
+		} else if execPath, err := exec.LookPath(cmd); err == nil {
+			externalCmd := exec.Command(execPath, args...)
+			externalCmd.Stdout = os.Stdout
+			externalCmd.Stderr = os.Stderr
+			externalCmd.Stdin = os.Stdin
+			if err := externalCmd.Run(); err != nil {
+				fmt.Printf("%s: error running command: %v\n", cmd, err)
+			}
 		} else {
 			fmt.Printf("%s: command not found\n", cmd)
 		}
