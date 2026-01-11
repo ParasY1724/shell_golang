@@ -46,19 +46,29 @@ func init() {
 				fmt.Fprintln(os.Stderr, "cd: missing argument")
 				return
 			}
-		
-			info, err := os.Stat(args[0])
+
+			dir := args[0]
+			if dir[0] == '~' {
+				if homeDir,er := os.UserHomeDir();er == nil {
+					dir = strings.Replace(dir,"~",homeDir,1)
+				} else {
+					fmt.Println(er)
+					return
+				}
+			}
+
+			info, err := os.Stat(dir)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", args[0])
+				fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", dir)
 				return
 			}
 		
 			if !info.IsDir() {
-				fmt.Fprintf(os.Stderr, "cd: %s: Not a directory\n", args[0])
+				fmt.Fprintf(os.Stderr, "cd: %s: Not a directory\n", dir)
 				return
 			}
 		
-			if err := os.Chdir(args[0]); err != nil {
+			if err := os.Chdir(dir); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 			}
 		},
