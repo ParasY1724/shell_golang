@@ -58,8 +58,8 @@ func main() {
 
 		if fn, ok := knownCmds[cmd]; ok {
 			fn(args)
-		} else if execPath, err := exec.LookPath(cmd); err == nil {
-			externalCmd := exec.Command(execPath, args...)
+		} else if _, err := exec.LookPath(cmd); err == nil {
+			externalCmd := exec.Command(cmd, args...)
 			externalCmd.Stdout = os.Stdout
 			externalCmd.Stderr = os.Stderr
 			externalCmd.Stdin = os.Stdin
