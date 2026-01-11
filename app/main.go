@@ -33,13 +33,19 @@ func init() {
 				fmt.Printf("%s: not found\n",cmd)
 			}		
 		},
-		"pwd" : func(ags []string) {
+		"pwd" : func(args []string) {
 			dir , err := os.Getwd()
 			if err != nil {
 				fmt.Println(err)
 				return
 			}
 			fmt.Println(dir)
+		},
+		"cd" : func(args []string) {
+			err := os.Chdir(args[1])
+			if err != nil {
+				println(err)
+			}
 		},
 	}
 }
