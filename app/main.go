@@ -42,7 +42,7 @@ func init() {
 			fmt.Println(dir)
 		},
 		"cd" : func(args []string) {
-			err := os.Chdir(args[1])
+			err := os.Chdir(args[0])
 			if err != nil {
 				println(err)
 			}
