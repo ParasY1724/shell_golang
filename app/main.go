@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"os/exec"
+	"io"
 )
 
 var knownCmds map[string]func([]string)
@@ -69,6 +70,20 @@ func init() {
 		
 			if err := os.Chdir(dir); err != nil {
 				fmt.Fprintln(os.Stderr, err)
+			}
+		},
+		"cat" : func(args []string) {
+			for _,filename := range args {
+				f,err := os.Open(filename)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "cat: %s\n", err)
+					break
+				}
+				if _, err := io.Copy(os.Stdout, f); err != nil {
+					fmt.Fprintf(os.Stderr, "cat: error reading: %s\n", err)
+					break
+				}
+				f.Close()
 			}
 		},
 	}
