@@ -53,10 +53,9 @@ func init() {
 					dir = strings.Replace(dir,"~",homeDir,1)
 				} else {
 					fmt.Println(er)
-					return
 				}
 			}
-
+		
 			info, err := os.Stat(dir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", dir)
@@ -75,6 +74,42 @@ func init() {
 	}
 }
 
+
+func parseInput(line string) []string {
+	var args []string
+	var current strings.Builder
+	inSingleQuote := false
+
+	for i := 0; i < len(line); i++ {
+		ch := line[i]
+
+		switch ch {
+		case '\'':
+			inSingleQuote = !inSingleQuote
+
+		case ' ', '\t':
+			if inSingleQuote {
+				current.WriteByte(ch)
+			} else {
+				if current.Len() > 0 {
+					args = append(args, current.String())
+					current.Reset()
+				}
+			}
+
+		default:
+			current.WriteByte(ch)
+		}
+	}
+
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+
+	return args
+}
+
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
@@ -91,7 +126,7 @@ func main() {
 			continue
 		}
 
-		parts := strings.Fields(line)
+		parts := parseInput(line)
 		cmd := parts[0]
 		args := parts[1:]
 
