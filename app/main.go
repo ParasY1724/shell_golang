@@ -80,11 +80,20 @@ func parseInput(line string) []string {
 	var current strings.Builder
 	inSingleQuote := false
 	inDoubleQuote := false
+	afterBlackSlash := false
 
 	for i := 0; i < len(line); i++ {
 		ch := line[i]
-
+		if afterBlackSlash {
+			afterBlackSlash = false
+			current.WriteByte(ch)
+			continue
+		}
 		switch ch {
+
+		case 92 :
+			afterBlackSlash = true
+
 		case '\'':
 			if inDoubleQuote {
 				current.WriteByte(ch)
