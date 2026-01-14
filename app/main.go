@@ -79,16 +79,24 @@ func parseInput(line string) []string {
 	var args []string
 	var current strings.Builder
 	inSingleQuote := false
+	inDoubleQuote := false
 
 	for i := 0; i < len(line); i++ {
 		ch := line[i]
 
 		switch ch {
 		case '\'':
-			inSingleQuote = !inSingleQuote
+			if inDoubleQuote {
+				current.WriteByte(ch)
+			} else {
+				inSingleQuote = !inSingleQuote
+			}
+		
+		case '"' :
+			inDoubleQuote = !inDoubleQuote
 
 		case ' ', '\t':
-			if inSingleQuote {
+			if inSingleQuote || inDoubleQuote {
 				current.WriteByte(ch)
 			} else {
 				if current.Len() > 0 {
