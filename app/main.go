@@ -158,6 +158,22 @@ func parseInput(line string) []string {
 	return args
 }
 
+func withStdoutRedirect(filename string, fn func()) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+
+	oldStdout := os.Stdout
+	os.Stdout = file
+
+	fn()
+
+	file.Close()
+	os.Stdout = oldStdout
+	return nil
+}
+
 
 
 func main() {
@@ -181,6 +197,21 @@ func main() {
 		args := parts[1:]
 
 		if fn, ok := buildinCmds[cmd]; ok {
+
+			if len(args) >= 3 && (args[len(args)-2] == ">" || args[len(args)-2] == "1>") {
+				filename := args[len(args)-1]
+				cmdArgs := args[:len(args)-2]
+		
+				err := withStdoutRedirect(filename, func() {
+					fn(cmdArgs)
+				})
+		
+				if err != nil {
+					fmt.Fprintln(os.Stderr, err)
+				}
+				continue
+			}
+		
 			fn(args)
 		} else if fn,ok = extCmds[cmd]; ok {
 			fn(args)
