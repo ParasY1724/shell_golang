@@ -44,6 +44,22 @@ func init() {
 			}
 			fmt.Println(dir)
 		},
+		"ls" : func(args []string) {
+			dir := "."
+			if len(args) > 0 {
+				dir = args[0]
+			}
+			files , err := os.ReadDir(dir)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			for _,file := range files {
+				fmt.Println(file.Name())
+			}
+			
+		},
 		"cd" : func(args []string) {
 			if len(args) == 0 {
 				fmt.Fprintln(os.Stderr, "cd: missing argument")
