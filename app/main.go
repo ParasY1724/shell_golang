@@ -49,6 +49,7 @@ func init() {
 			if len(args) > 0 {
 				dir = args[0]
 			}
+			if (dir == "-1") {dir = "."}
 			files , err := os.ReadDir(dir)
 			if err != nil {
 				fmt.Println(err)
