@@ -76,7 +76,7 @@ func init() {
 		},
 	}
 	
-	
+
 	extCmds = map[string]func([]string) {
 		"cat" : func(args []string) {
 			for _,filename := range args {
@@ -128,7 +128,11 @@ func parseInput(line string) []string {
 			}
 		
 		case '"' :
-			inDoubleQuote = !inDoubleQuote
+			if inSingleQuote {
+				current.WriteByte(ch)
+			} else {
+				inDoubleQuote = !inDoubleQuote
+			}
 
 		case ' ', '\t':
 			if inSingleQuote || inDoubleQuote {
