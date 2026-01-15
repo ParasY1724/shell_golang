@@ -107,7 +107,9 @@ func parseInput(line string) []string {
 		switch ch {
 
 		case 92 :
-			afterBlackSlash = true
+			if !inDoubleQuote || !inSingleQuote{
+				afterBlackSlash = true
+			}
 
 		case '\'':
 			if inDoubleQuote {
