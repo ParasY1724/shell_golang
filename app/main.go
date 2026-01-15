@@ -109,6 +109,8 @@ func parseInput(line string) []string {
 		case 92 :
 			if !inDoubleQuote || !inSingleQuote{
 				afterBlackSlash = true
+			} else {
+				current.WriteByte(ch)
 			}
 
 		case '\'':
