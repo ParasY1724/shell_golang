@@ -107,7 +107,7 @@ func parseInput(line string) []string {
 		switch ch {
 
 		case '\\':
-			if inSingleQuote {
+			if inSingleQuote || inDoubleQuote {
 				current.WriteByte('\\')
 				continue
 			}
