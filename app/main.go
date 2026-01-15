@@ -9,10 +9,12 @@ import (
 	"io"
 )
 
-var knownCmds map[string]func([]string)
+var buildinCmds map[string]func([]string)
+var extCmds map[string]func([]string)
+
 
 func init() {
-	knownCmds = map[string]func([]string){
+	buildinCmds = map[string]func([]string){
 		"exit": func(args []string) {
 			os.Exit(0)
 		},
@@ -25,7 +27,7 @@ func init() {
 				return
 			}
 			cmd := args[0]
-			if _, ok := knownCmds[cmd]; ok {
+			if _, ok := buildinCmds[cmd]; ok {
 				fmt.Printf("%s is a shell builtin\n", cmd)
 				
 			} else if execPath, err := exec.LookPath(cmd); err == nil {
@@ -72,6 +74,9 @@ func init() {
 				fmt.Fprintln(os.Stderr, err)
 			}
 		},
+	}
+	
+	extCmds = map[string]func([]string) {
 		"cat" : func(args []string) {
 			for _,filename := range args {
 				f,err := os.Open(filename)
@@ -86,7 +91,7 @@ func init() {
 				f.Close()
 			}
 		},
-	}
+	} 
 }
 
 
@@ -167,9 +172,11 @@ func main() {
 		cmd := parts[0]
 		args := parts[1:]
 
-		if fn, ok := knownCmds[cmd]; ok {
+		if fn, ok := buildinCmds[cmd]; ok {
 			fn(args)
-		} else if _, err := exec.LookPath(cmd); err == nil {
+		} else if fn,ok = extCmds[cmd]; ok {
+			fn(args)
+		}else if _, err := exec.LookPath(cmd); err == nil {
 			externalCmd := exec.Command(cmd, args...)
 			externalCmd.Stdout = os.Stdout
 			externalCmd.Stderr = os.Stderr
