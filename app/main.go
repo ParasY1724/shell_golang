@@ -76,6 +76,7 @@ func init() {
 		},
 	}
 	
+	
 	extCmds = map[string]func([]string) {
 		"cat" : func(args []string) {
 			for _,filename := range args {
