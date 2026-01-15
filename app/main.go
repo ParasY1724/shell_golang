@@ -106,12 +106,13 @@ func parseInput(line string) []string {
 		}
 		switch ch {
 
-		case 92 :
-			if !inDoubleQuote || !inSingleQuote{
-				afterBlackSlash = true
-			} else {
-				current.WriteByte(ch)
+		case '\\':
+			if inSingleQuote {
+				current.WriteByte('\\')
+				continue
 			}
+		
+			afterBlackSlash = true		
 
 		case '\'':
 			if inDoubleQuote {
