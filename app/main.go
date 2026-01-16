@@ -52,6 +52,10 @@ func init() {
 				dir = args[0]
 			}
 
+			if (dir == "-1") {
+				dir = args[1]
+			}
+
 			files, err := os.ReadDir(dir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "ls: %s: No such file or directory\n", dir)
