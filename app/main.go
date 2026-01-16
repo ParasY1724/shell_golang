@@ -97,18 +97,21 @@ func init() {
 	
 
 	extCmds = map[string]func([]string) {
-		"cat" : func(args []string) {
-			for _,filename := range args {
-				f,err := os.Open(filename)
+		"cat": func(args []string) {
+			for _, filename := range args {
+				f, err := os.Open(filename)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "cat: %s\n", err)
-					break
+					fmt.Fprintf(os.Stderr,
+						"cat: %s: No such file or directory\n", filename)
+					continue
 				}
-				if _, err := io.Copy(os.Stdout, f); err != nil {
-					fmt.Fprintf(os.Stderr, "cat: error reading: %s\n", err)
-					break
-				}
+
+				_, err = io.Copy(os.Stdout, f)
 				f.Close()
+				if err != nil {
+					fmt.Fprintf(os.Stderr,
+						"cat: %s: read error\n", filename)
+				}
 			}
 		},
 	} 
@@ -215,35 +218,36 @@ func main() {
 		cmd := parts[0]
 		args := parts[1:]
 
-		if fn, ok := buildinCmds[cmd]; ok {
+		redirect := false
+		var outFile string
 
-			if len(args) >= 3 && (args[len(args)-2] == ">" || args[len(args)-2] == "1>") {
-				filename := args[len(args)-1]
-				cmdArgs := args[:len(args)-2]
-		
-				err := withStdoutRedirect(filename, func() {
-					fn(cmdArgs)
-				})
-		
-				if err != nil {
-					fmt.Fprintln(os.Stderr, err)
-				}
-				continue
-			}
-		
-			fn(args)
-		} else if fn,ok = extCmds[cmd]; ok {
-			fn(args)
-		}else if _, err := exec.LookPath(cmd); err == nil {
-			externalCmd := exec.Command(cmd, args...)
-			externalCmd.Stdout = os.Stdout
-			externalCmd.Stderr = os.Stderr
-			externalCmd.Stdin = os.Stdin
-			if err := externalCmd.Run(); err != nil {
-				fmt.Printf("%s: error running command: %v\n", cmd, err)
-			}
-		} else {
-			fmt.Printf("%s: command not found\n", cmd)
+		if len(args) >= 2 && (args[len(args)-2] == ">" || args[len(args)-2] == "1>") {
+			redirect = true
+			outFile = args[len(args)-1]
+			args = args[:len(args)-2]
 		}
+
+
+		run := func() {
+			if fn, ok := buildinCmds[cmd]; ok {
+				fn(args)
+			} else if fn, ok := extCmds[cmd]; ok {
+				fn(args)
+			} else if _, err := exec.LookPath(cmd); err == nil {
+				c := exec.Command(cmd, args...)
+				c.Stdout = os.Stdout
+				c.Stderr = os.Stderr
+				c.Stdin = os.Stdin
+				c.Run()
+			} else {
+				fmt.Printf("%s: command not found\n", cmd)
+			}
+		}
+		
+		if redirect {
+			withStdoutRedirect(outFile, run)
+		} else {
+			run()
+		}		
 	}
 }
