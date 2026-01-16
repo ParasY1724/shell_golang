@@ -180,7 +180,7 @@ func parseInput(line string) []string {
 	return args
 }
 
-func withStdoutRedirect(filename string, appendMode bool, fn func()) error {
+func withStdRedirect(filename string, appendMode bool,isStderr bool ,fn func()) error {
 	var file *os.File
 	var err error
 
@@ -194,42 +194,25 @@ func withStdoutRedirect(filename string, appendMode bool, fn func()) error {
 		return err
 	}
 
-	old := os.Stdout
-	os.Stdout = file
+	var old *os.File
 
-	fn()
-
-	file.Close()
-	os.Stdout = old
-	return nil
-}
-
-func withStderrRedirect(filename string, appendMode bool, fn func()) error {
-	var file *os.File
-	var err error
-
-	if appendMode {
-		file, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if isStderr {
+		old = os.Stderr
+		os.Stderr = file
 	} else {
-		file, err = os.Create(filename)
+		old = os.Stdout
+		os.Stdout = file
 	}
-
-	if err != nil {
-		return err
-	}
-
-	old := os.Stderr
-	os.Stderr = file
 
 	fn()
-
 	file.Close()
-	os.Stderr = old
+	if isStderr {
+		os.Stderr = file
+	} else {
+		os.Stdout = old
+	}
 	return nil
 }
-
-
-
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
@@ -303,13 +286,13 @@ func main() {
 		}
 		
 		if redirectOut && redirectErr {
-			withStdoutRedirect(outFile, appendOut, func() {
-				withStderrRedirect(errFile, appendErr, run)
+			withStdRedirect(outFile, appendOut,false, func() {
+				withStdRedirect(errFile, appendErr,true, run)
 			})
 		} else if redirectOut {
-			withStdoutRedirect(outFile, appendOut, run)
+			withStdRedirect(outFile, appendOut,false, run)
 		} else if redirectErr {
-			withStderrRedirect(errFile, appendErr, run)
+			withStdRedirect(errFile, appendErr,true, run)
 		} else {
 			run()
 		}
