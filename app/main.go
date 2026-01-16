@@ -180,30 +180,49 @@ func parseInput(line string) []string {
 	return args
 }
 
-func withStdoutRedirect(filename string, fn func()) error {
-	file, err := os.Create(filename)
+func withStdoutRedirect(filename string, appendMode bool, fn func()) error {
+	var file *os.File
+	var err error
+
+	if appendMode {
+		file, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	} else {
+		file, err = os.Create(filename)
+	}
+
 	if err != nil {
 		return err
 	}
 
-	oldStdout := os.Stdout
+	old := os.Stdout
 	os.Stdout = file
 
 	fn()
 
 	file.Close()
-	os.Stdout = oldStdout
+	os.Stdout = old
 	return nil
 }
 
-func withStderrRedirect(filename string, fn func()) error {
-	file, err := os.Create(filename)
+func withStderrRedirect(filename string, appendMode bool, fn func()) error {
+	var file *os.File
+	var err error
+
+	if appendMode {
+		file, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	} else {
+		file, err = os.Create(filename)
+	}
+
 	if err != nil {
 		return err
 	}
+
 	old := os.Stderr
 	os.Stderr = file
+
 	fn()
+
 	file.Close()
 	os.Stderr = old
 	return nil
@@ -234,19 +253,37 @@ func main() {
 
 		redirectOut := false
 		redirectErr := false
+		appendOut := false
+		appendErr := false
+
 		var outFile, errFile string
 
 		if len(args) >= 2 {
-			if args[len(args)-2] == ">" || args[len(args)-2] == "1>" {
+			op := args[len(args)-2]
+			file := args[len(args)-1]
+
+			switch op {
+			case ">", "1>":
 				redirectOut = true
-				outFile = args[len(args)-1]
-				args = args[:len(args)-2]
-			} else if args[len(args)-2] == "2>" {
+				outFile = file
+			case ">>", "1>>":
+				redirectOut = true
+				appendOut = true
+				outFile = file
+			case "2>":
 				redirectErr = true
-				errFile = args[len(args)-1]
+				errFile = file
+			case "2>>":
+				redirectErr = true
+				appendErr = true
+				errFile = file
+			}
+
+			if redirectOut || redirectErr {
 				args = args[:len(args)-2]
 			}
 		}
+
 
 
 		run := func() {
@@ -266,15 +303,16 @@ func main() {
 		}
 		
 		if redirectOut && redirectErr {
-			withStdoutRedirect(outFile, func() {
-				withStderrRedirect(errFile, run)
+			withStdoutRedirect(outFile, appendOut, func() {
+				withStderrRedirect(errFile, appendErr, run)
 			})
 		} else if redirectOut {
-			withStdoutRedirect(outFile, run)
+			withStdoutRedirect(outFile, appendOut, run)
 		} else if redirectErr {
-			withStderrRedirect(errFile, run)
+			withStderrRedirect(errFile, appendErr, run)
 		} else {
 			run()
-		}		
+		}
+				
 	}
 }
