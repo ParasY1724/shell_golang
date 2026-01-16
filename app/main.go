@@ -3,25 +3,24 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"strings"
+	"os/exec"
+	"io"
 )
 
 var buildinCmds map[string]func([]string)
 var extCmds map[string]func([]string)
+
 
 func init() {
 	buildinCmds = map[string]func([]string){
 		"exit": func(args []string) {
 			os.Exit(0)
 		},
-
 		"echo": func(args []string) {
 			fmt.Println(strings.Join(args, " "))
 		},
-
 		"type": func(args []string) {
 			if len(args) == 0 {
 				fmt.Fprintln(os.Stderr, "type: missing operand")
@@ -30,73 +29,74 @@ func init() {
 			cmd := args[0]
 			if _, ok := buildinCmds[cmd]; ok {
 				fmt.Printf("%s is a shell builtin\n", cmd)
+				
 			} else if execPath, err := exec.LookPath(cmd); err == nil {
-				fmt.Printf("%s is %s\n", cmd, execPath)
+				fmt.Printf("%s is %s\n",cmd,execPath)
 			} else {
 				fmt.Fprintf(os.Stderr, "%s: not found\n", cmd)
-			}
+			}		
 		},
-
-		"pwd": func(args []string) {
-			dir, err := os.Getwd()
+		"pwd" : func(args []string) {
+			dir , err := os.Getwd()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				return
 			}
 			fmt.Println(dir)
 		},
-
-		"ls": func(args []string) {
+		"ls" : func(args []string) {
 			dir := "."
 			if len(args) > 0 {
 				dir = args[0]
 			}
-
 			if (dir == "-1") {
 				dir = args[1]
 			}
-
-			files, err := os.ReadDir(dir)
+			files , err := os.ReadDir(dir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "ls: %s: No such file or directory\n", dir)
 				return
 			}
 
-			for _, f := range files {
-				fmt.Println(f.Name())
+			for _,file := range files {
+				fmt.Println(file.Name())
 			}
+			
 		},
-
-		"cd": func(args []string) {
+		"cd" : func(args []string) {
 			if len(args) == 0 {
 				fmt.Fprintln(os.Stderr, "cd: missing argument")
 				return
 			}
 
 			dir := args[0]
-			if strings.HasPrefix(dir, "~") {
-				if home, err := os.UserHomeDir(); err == nil {
-					dir = strings.Replace(dir, "~", home, 1)
+			if dir[0] == '~' {
+				if homeDir,er := os.UserHomeDir();er == nil {
+					dir = strings.Replace(dir,"~",homeDir,1)
+				} else {
+					fmt.Println(er)
 				}
 			}
-
+		
 			info, err := os.Stat(dir)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", dir)
 				return
 			}
+		
 			if !info.IsDir() {
 				fmt.Fprintf(os.Stderr, "cd: %s: Not a directory\n", dir)
 				return
 			}
-
+		
 			if err := os.Chdir(dir); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 			}
 		},
 	}
+	
 
-	extCmds = map[string]func([]string){
+	extCmds = map[string]func([]string) {
 		"cat": func(args []string) {
 			for _, filename := range args {
 				f, err := os.Open(filename)
@@ -105,6 +105,7 @@ func init() {
 						"cat: %s: No such file or directory\n", filename)
 					continue
 				}
+
 				_, err = io.Copy(os.Stdout, f)
 				f.Close()
 				if err != nil {
@@ -113,8 +114,9 @@ func init() {
 				}
 			}
 		},
-	}
+	} 
 }
+
 
 func parseInput(line string) []string {
 	var args []string
@@ -136,6 +138,15 @@ func parseInput(line string) []string {
 		if ch == '\\' {
 			if inSingle {
 				current.WriteByte(ch)
+			} else if inDouble {
+				if i+1 < len(line) {
+					next := line[i+1]
+					if next == '"' || next == '\\' || next == '$' || next == '`' || next == '\n' {
+						escaped = true
+					} else {
+						current.WriteByte(ch)
+					}
+				}
 			} else {
 				escaped = true
 			}
@@ -174,11 +185,14 @@ func withStdoutRedirect(filename string, fn func()) error {
 	if err != nil {
 		return err
 	}
-	old := os.Stdout
+
+	oldStdout := os.Stdout
 	os.Stdout = file
+
 	fn()
+
 	file.Close()
-	os.Stdout = old
+	os.Stdout = oldStdout
 	return nil
 }
 
@@ -195,16 +209,21 @@ func withStderrRedirect(filename string, fn func()) error {
 	return nil
 }
 
+
+
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
 		fmt.Print("$ ")
+
 		if !scanner.Scan() {
 			break
 		}
 
 		line := strings.TrimSpace(scanner.Text())
+		
 		if line == "" {
 			continue
 		}
@@ -229,6 +248,7 @@ func main() {
 			}
 		}
 
+
 		run := func() {
 			if fn, ok := buildinCmds[cmd]; ok {
 				fn(args)
@@ -241,10 +261,10 @@ func main() {
 				c.Stdin = os.Stdin
 				c.Run()
 			} else {
-				fmt.Fprintf(os.Stderr, "%s: command not found\n", cmd)
+				fmt.Printf("%s: command not found\n", cmd)
 			}
 		}
-
+		
 		if redirectOut && redirectErr {
 			withStdoutRedirect(outFile, func() {
 				withStderrRedirect(errFile, run)
@@ -255,6 +275,6 @@ func main() {
 			withStderrRedirect(errFile, run)
 		} else {
 			run()
-		}
+		}		
 	}
 }
