@@ -67,14 +67,11 @@ func EnableRawMode(fd int) (*syscall.Termios, error) {
 	return &oldState, nil
 }
 
-// RestoreTerminal reverts the terminal to its original state.
-// This is critical! If you don't call this before exiting, the user's terminal
-// will stay in raw mode (no echo, weird Enter behavior) after your shell closes.
 func RestoreTerminal(fd int, state *syscall.Termios) {
 	syscall.Syscall6(
 		syscall.SYS_IOCTL,
 		uintptr(fd),
-		uintptr(syscall.TCSETS),           // Command: Set attributes back to oldState
+		uintptr(syscall.TCSETS),
 		uintptr(unsafe.Pointer(state)),
 		0, 0, 0,
 	)

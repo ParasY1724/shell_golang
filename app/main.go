@@ -40,14 +40,23 @@ func main() {
 				fmt.Println()
 				goto EXECUTE
 
-			case '\t': // TAB (Autocomplete)
-				newLine, ok := parser.Autocomplete(line.String())
-				if ok {
-					fmt.Print("\r$ ")
-					fmt.Print(newLine)
-					line.Reset()
-					line.WriteString(newLine)
-				}
+				case '\t': // TAB (Autocomplete using Trie)
+					input := line.String()
+					
+					parts := strings.Split(input, " ")
+					lastWord := parts[len(parts)-1]
+					
+					if len(lastWord) > 0 {
+						suggestion, found := registry.Suggest(lastWord)
+						if found {
+							// suggestion: "echo", lastWord: "ec" -> suffix: "ho"
+							suffix := suggestion[len(lastWord):]
+							
+							line.WriteString(suffix + " ")
+							
+							fmt.Print(suffix + " ")
+						}
+					}
 
 			case 127: // BACKSPACE '/'
 				if line.Len() > 0 {
