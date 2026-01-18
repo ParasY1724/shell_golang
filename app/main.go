@@ -11,6 +11,7 @@ import (
 	"github.com/codecrafters-io/shell-starter-go/pkg/executor"
 	"github.com/codecrafters-io/shell-starter-go/pkg/parser"
 	"github.com/codecrafters-io/shell-starter-go/pkg/term"
+	"github.com/codecrafters-io/shell-starter-go/pkg/utils"
 )
 
 func main() {
@@ -49,22 +50,32 @@ func main() {
 					
 					if len(lastWord) > 0 {
 						suggestion, found := registry.Suggest(lastWord)
-						if found {
-							
+						if found && len(suggestion) > 0 {
+
+							lcp := utils.FindLeastPrefix(suggestion)
+							if len(lcp) > len(lastWord) {
+								suffix := lcp[len(lastWord):]
+								line.WriteString(suffix)
+								fmt.Print(suffix)
+								tabCount = 0
+							}
+
 							if (len(suggestion) == 1){
-								suffix := suggestion[0][len(lastWord):]
-								line.WriteString(suffix + " ")
-								fmt.Print(suffix + " ")
+								line.WriteString(" ")
+								fmt.Print(" ")
 								tabCount = 0
 							} else {
-								tabCount++;
-								if (tabCount == 1){
-									fmt.Print("\x07")
-								} else {
-									fmt.Print("\r\n")
-									fmt.Println(strings.Join(suggestion, "  "))
-									fmt.Print("$ ", line.String())
-									tabCount = 0
+
+								if len(lcp) == len(lastWord){
+									tabCount++;
+									if (tabCount == 1){
+										fmt.Print("\x07")
+									} else {
+										fmt.Print("\r\n")
+										fmt.Println(strings.Join(suggestion, "  "))
+										fmt.Print("$ ", line.String())
+										tabCount = 0
+									}
 								}
 							}
 							
