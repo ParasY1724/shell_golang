@@ -65,18 +65,3 @@ func ParseInput(line string) []string {
 
 	return args
 }
-
-func Autocomplete(input string) (string, bool) {
-	parts := strings.Split(input, " ")
-	last := parts[len(parts)-1]
-
-	if strings.HasPrefix("echo", last) {
-		parts[len(parts)-1] = "echo"
-	} else if strings.HasPrefix("exit", last) {
-		parts[len(parts)-1] = "exit"
-	} else {
-		return input, false
-	}
-
-	return strings.Join(parts, " ") + " ", true
-}

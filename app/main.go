@@ -55,6 +55,8 @@ func main() {
 							line.WriteString(suffix + " ")
 							
 							fmt.Print(suffix + " ")
+						} else {
+							fmt.Print("\x07")
 						}
 					}
 
