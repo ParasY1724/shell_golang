@@ -106,20 +106,16 @@ func (r *Registry) loadPathExecutables() {
 	}
 }
 
-func (r *Registry) Suggest(prefix string) (string, bool) {
+func (r *Registry) Suggest(prefix string) ([]string, bool) {
 	candidates := r.CmdTrie.SearchPrefix(prefix)
 	
 	if len(candidates) == 0 {
-		return "", false
+		return []string{""} , false
 	}
 	
 	sort.Strings(candidates)
 
-	if len(candidates) == 1 {
-		return candidates[0], true
-	}
-
-	return candidates[0], true
+	return candidates, true
 }
 
 func (r *Registry) registerBuiltins() {

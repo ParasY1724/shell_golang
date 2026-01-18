@@ -28,6 +28,7 @@ func main() {
 		fmt.Print("$ ")
 
 		var line strings.Builder
+		tabCount := 0
 
 		for {
 			ch, err := reader.ReadByte()
@@ -49,12 +50,24 @@ func main() {
 					if len(lastWord) > 0 {
 						suggestion, found := registry.Suggest(lastWord)
 						if found {
-							// suggestion: "echo", lastWord: "ec" -> suffix: "ho"
-							suffix := suggestion[len(lastWord):]
 							
-							line.WriteString(suffix + " ")
+							if (len(suggestion) == 1){
+								suffix := suggestion[0][len(lastWord):]
+								line.WriteString(suffix + " ")
+								fmt.Print(suffix + " ")
+								tabCount = 0
+							} else {
+								tabCount++;
+								if (tabCount == 1){
+									fmt.Print("\x07")
+								} else {
+									fmt.Print("\r\n")
+									fmt.Println(strings.Join(suggestion, "  "))
+									fmt.Print("$ ", line.String())
+									tabCount = 0
+								}
+							}
 							
-							fmt.Print(suffix + " ")
 						} else {
 							fmt.Print("\x07")
 						}
