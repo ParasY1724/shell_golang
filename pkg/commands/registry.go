@@ -73,7 +73,37 @@ func NewRegistry() *Registry {
 	}
 	r.registerBuiltins()
 	r.registerExt()
+	r.loadPathExecutables()
 	return r
+}
+
+func (r *Registry) loadPathExecutables() {
+	pathEnv := os.Getenv("PATH")
+	paths := strings.Split(pathEnv, string(os.PathListSeparator))
+
+	for _, dir := range paths {
+		if dir == "" {
+			continue
+		}
+
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+
+		for _, file := range files {
+			if file.IsDir() {
+				continue
+			}
+			info, err := file.Info()
+			if err != nil {
+				continue
+			}
+			if info.Mode()&0111 != 0 {
+				r.CmdTrie.Insert(file.Name())
+			}
+		}
+	}
 }
 
 func (r *Registry) Suggest(prefix string) (string, bool) {
