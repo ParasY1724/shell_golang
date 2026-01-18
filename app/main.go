@@ -4,241 +4,84 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"strings"
 	"os/exec"
-	"io"
+	"strings"
+
+	"github.com/codecrafters-io/shell-starter-go/pkg/commands"
+	"github.com/codecrafters-io/shell-starter-go/pkg/executor"
+	"github.com/codecrafters-io/shell-starter-go/pkg/parser"
+	"github.com/codecrafters-io/shell-starter-go/pkg/term"
 )
 
-var buildinCmds map[string]func([]string)
-var extCmds map[string]func([]string)
-
-
-func init() {
-	buildinCmds = map[string]func([]string){
-		"exit": func(args []string) {
-			os.Exit(0)
-		},
-		"echo": func(args []string) {
-			fmt.Println(strings.Join(args, " "))
-		},
-		"type": func(args []string) {
-			if len(args) == 0 {
-				fmt.Fprintln(os.Stderr, "type: missing operand")
-				return
-			}
-			cmd := args[0]
-			if _, ok := buildinCmds[cmd]; ok {
-				fmt.Printf("%s is a shell builtin\n", cmd)
-				
-			} else if execPath, err := exec.LookPath(cmd); err == nil {
-				fmt.Printf("%s is %s\n",cmd,execPath)
-			} else {
-				fmt.Fprintf(os.Stderr, "%s: not found\n", cmd)
-			}		
-		},
-		"pwd" : func(args []string) {
-			dir , err := os.Getwd()
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				return
-			}
-			fmt.Println(dir)
-		},
-		"ls" : func(args []string) {
-			dir := "."
-			if len(args) > 0 {
-				dir = args[0]
-			}
-			if (dir == "-1") {
-				dir = args[1]
-			}
-			files , err := os.ReadDir(dir)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "ls: %s: No such file or directory\n", dir)
-				return
-			}
-
-			for _,file := range files {
-				fmt.Println(file.Name())
-			}
-			
-		},
-		"cd" : func(args []string) {
-			if len(args) == 0 {
-				fmt.Fprintln(os.Stderr, "cd: missing argument")
-				return
-			}
-
-			dir := args[0]
-			if dir[0] == '~' {
-				if homeDir,er := os.UserHomeDir();er == nil {
-					dir = strings.Replace(dir,"~",homeDir,1)
-				} else {
-					fmt.Println(er)
-				}
-			}
-		
-			info, err := os.Stat(dir)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", dir)
-				return
-			}
-		
-			if !info.IsDir() {
-				fmt.Fprintf(os.Stderr, "cd: %s: Not a directory\n", dir)
-				return
-			}
-		
-			if err := os.Chdir(dir); err != nil {
-				fmt.Fprintln(os.Stderr, err)
-			}
-		},
-	}
-	
-
-	extCmds = map[string]func([]string) {
-		"cat": func(args []string) {
-			for _, filename := range args {
-				f, err := os.Open(filename)
-				if err != nil {
-					fmt.Fprintf(os.Stderr,
-						"cat: %s: No such file or directory\n", filename)
-					continue
-				}
-
-				_, err = io.Copy(os.Stdout, f)
-				f.Close()
-				if err != nil {
-					fmt.Fprintf(os.Stderr,
-						"cat: %s: read error\n", filename)
-				}
-			}
-		},
-	} 
-}
-
-
-func parseInput(line string) []string {
-	var args []string
-	var current strings.Builder
-
-	inSingle := false
-	inDouble := false
-	escaped := false
-
-	for i := 0; i < len(line); i++ {
-		ch := line[i]
-
-		if escaped {
-			current.WriteByte(ch)
-			escaped = false
-			continue
-		}
-
-		if ch == '\\' {
-			if inSingle {
-				current.WriteByte(ch)
-			} else if inDouble {
-				if i+1 < len(line) {
-					next := line[i+1]
-					if next == '"' || next == '\\' || next == '$' || next == '`' || next == '\n' {
-						escaped = true
-					} else {
-						current.WriteByte(ch)
-					}
-				}
-			} else {
-				escaped = true
-			}
-			continue
-		}
-
-		if ch == '\'' && !inDouble {
-			inSingle = !inSingle
-			continue
-		}
-		if ch == '"' && !inSingle {
-			inDouble = !inDouble
-			continue
-		}
-
-		if (ch == ' ' || ch == '\t') && !inSingle && !inDouble {
-			if current.Len() > 0 {
-				args = append(args, current.String())
-				current.Reset()
-			}
-			continue
-		}
-
-		current.WriteByte(ch)
-	}
-
-	if current.Len() > 0 {
-		args = append(args, current.String())
-	}
-
-	return args
-}
-
-func withStdRedirect(filename string, appendMode bool,isStderr bool ,fn func()) error {
-	var file *os.File
-	var err error
-
-	if appendMode {
-		file, err = os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	} else {
-		file, err = os.Create(filename)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	var old *os.File
-
-	if isStderr {
-		old = os.Stderr
-		os.Stderr = file
-	} else {
-		old = os.Stdout
-		os.Stdout = file
-	}
-
-	fn()
-	file.Close()
-	if isStderr {
-		os.Stderr = file
-	} else {
-		os.Stdout = old
-	}
-	return nil
-}
-
 func main() {
-	scanner := bufio.NewScanner(os.Stdin)
+	registry := commands.NewRegistry()
+
+	oldState, err := term.EnableRawMode(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	defer term.RestoreTerminal(int(os.Stdin.Fd()), oldState)
+
+	reader := bufio.NewReader(os.Stdin)
 
 	for {
 		fmt.Print("$ ")
 
-		if !scanner.Scan() {
-			break
+		var line strings.Builder
+
+		for {
+			ch, err := reader.ReadByte()
+			if err != nil {
+				return
+			}
+
+			switch ch {
+			case '\n','\r': // ENTER
+				fmt.Println()
+				goto EXECUTE
+
+			case '\t': // TAB (Autocomplete)
+				newLine, ok := parser.Autocomplete(line.String())
+				if ok {
+					fmt.Print("\r$ ")
+					fmt.Print(newLine)
+					line.Reset()
+					line.WriteString(newLine)
+				}
+
+			case 127: // BACKSPACE '/'
+				if line.Len() > 0 {
+					s := line.String()
+					line.Reset()
+					line.WriteString(s[:len(s)-1])
+					fmt.Print("\b \b")
+				}
+
+			default:
+				line.WriteByte(ch)
+				fmt.Print(string(ch))
+			}
 		}
 
-		line := strings.TrimSpace(scanner.Text())
-		
-		if line == "" {
+	EXECUTE:
+		cmdLine := strings.TrimSpace(line.String())
+		if cmdLine == "" {
 			continue
 		}
 
-		parts := parseInput(line)
+		parts := parser.ParseInput(cmdLine)
+		if len(parts) == 0 {
+			continue
+		}
+		
 		cmd := parts[0]
 		args := parts[1:]
 
+		// Handle Redirection logic
 		redirectOut := false
 		redirectErr := false
 		appendOut := false
 		appendErr := false
-
 		var outFile, errFile string
 
 		if len(args) >= 2 {
@@ -267,14 +110,13 @@ func main() {
 			}
 		}
 
-
-
 		run := func() {
-			if fn, ok := buildinCmds[cmd]; ok {
+			if fn, ok := registry.Builtins[cmd]; ok {
 				fn(args)
-			} else if fn, ok := extCmds[cmd]; ok {
+			} else if fn, ok := registry.ExtCmds[cmd]; ok {
 				fn(args)
 			} else if _, err := exec.LookPath(cmd); err == nil {
+				// System command fallback
 				c := exec.Command(cmd, args...)
 				c.Stdout = os.Stdout
 				c.Stderr = os.Stderr
@@ -284,18 +126,17 @@ func main() {
 				fmt.Printf("%s: command not found\n", cmd)
 			}
 		}
-		
+
 		if redirectOut && redirectErr {
-			withStdRedirect(outFile, appendOut,false, func() {
-				withStdRedirect(errFile, appendErr,true, run)
+			executor.WithStdRedirect(outFile, appendOut, false, func() {
+				executor.WithStdRedirect(errFile, appendErr, true, run)
 			})
 		} else if redirectOut {
-			withStdRedirect(outFile, appendOut,false, run)
+			executor.WithStdRedirect(outFile, appendOut, false, run)
 		} else if redirectErr {
-			withStdRedirect(errFile, appendErr,true, run)
+			executor.WithStdRedirect(errFile, appendErr, true, run)
 		} else {
 			run()
 		}
-				
 	}
 }
