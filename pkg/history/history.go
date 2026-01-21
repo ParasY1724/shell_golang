@@ -61,7 +61,7 @@ func (h *HistoryStruct) ReadHistory(n string) {
 	}
 }
 
-func (h *HistoryStruct) WriteHistory(cmd string) {
+func (h *HistoryStruct) Add(cmd string) {
 	if strings.TrimSpace(cmd) == "" {
 		return
 	}
@@ -71,6 +71,15 @@ func (h *HistoryStruct) WriteHistory(cmd string) {
 
 	h.history = append(h.history, cmd)
 	h.index = len(h.history)
+}
+
+func (h *HistoryStruct) Save(cmd string) {
+	if strings.TrimSpace(cmd) == "" {
+		return
+	}
+
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	file, err := os.OpenFile(".go_shell_history", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
