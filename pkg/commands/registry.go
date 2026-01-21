@@ -1,10 +1,12 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -202,6 +204,32 @@ func (r *Registry) registerBuiltins() {
 
 		if err := os.Chdir(dir); err != nil {
 			fmt.Fprintln(os.Stderr, err)
+		}
+	})
+
+	add("history" , func(args []string) {
+		file,err := os.Open(".go_shell_history")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error Writing History File : %s\n",err)
+			return
+		}
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		buf := make([]byte, 0, 1024*1024)
+		scanner.Buffer(buf, 1024*1024)
+		j := 0
+		if(len(args) > 0){
+			j,err = strconv.Atoi(args[0])
+			if err != nil {
+				fmt.Fprintf(os.Stderr,"Error : Expected Integer : %s\n",err)
+				return
+			}
+		}
+
+		i := 0
+		for scanner.Scan() {
+			i++
+			if(i >= j){fmt.Printf("	%d  %s\n",i,scanner.Text())}
 		}
 	})
 }

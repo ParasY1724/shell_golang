@@ -98,10 +98,7 @@ func main() {
 
 	EXECUTE:
 		cmdLine := strings.TrimSpace(line.String())
-		if cmdLine == "" {
-			continue
-		}
-
+		go utils.WriteHistory(cmdLine)
 		allParts := parser.ParseInput(cmdLine)
 		if len(allParts) == 0 {
 			continue
@@ -123,7 +120,7 @@ func main() {
 			pipelineCmds = append(pipelineCmds, currentCmd)
 		}
 
-		// 2. Prepare for Pipeline Execution
+		//  Prepare for Pipeline Execution
 		var prevPipeReader *os.File = nil
 		var wg sync.WaitGroup
 
