@@ -19,8 +19,6 @@ var builtinLock sync.Mutex
 
 func main() {
 	registry := commands.NewRegistry()
-	standardInput := os.Stdin
-	standardOutput := os.Stdout
 
 	histFile := os.Getenv("HISTFILE")
 	if histFile != "" {
@@ -235,12 +233,12 @@ func main() {
 				}
 
 				run := func() {
-					var effectiveStdin *os.File = standardInput
+					var effectiveStdin *os.File = os.Stdin
 					if thisPrevPipe != nil {
 						effectiveStdin = thisPrevPipe
 					}
 
-					var effectiveStdout *os.File = standardOutput
+					var effectiveStdout *os.File = os.Stdout
 					if thisNextPipeWriter != nil {
 						effectiveStdout = thisNextPipeWriter
 					}
@@ -262,7 +260,9 @@ func main() {
 						os.Stdin = effectiveStdin
 
 						fn(thisArgs)
- 
+
+						os.Stdout = oldStdout
+						os.Stdin = oldStdin
 
 					} else if _, err := exec.LookPath(thisCmdName); err == nil {
 						
