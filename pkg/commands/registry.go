@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -207,29 +206,33 @@ func (r *Registry) registerBuiltins() {
 		}
 	})
 
-	add("history" , func(args []string) {
-		file,err := os.Open(".go_shell_history")
+	add("history", func(args []string) {
+		content, err := os.ReadFile(".go_shell_history")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error Writing History File : %s\n",err)
+			fmt.Fprintf(os.Stderr, "Error reading history file: %v\n", err)
 			return
 		}
-		defer file.Close()
-		scanner := bufio.NewScanner(file)
-		buf := make([]byte, 0, 1024*1024)
-		scanner.Buffer(buf, 1024*1024)
-		j := 0
-		if(len(args) > 0){
-			j,err = strconv.Atoi(args[0])
-			if err != nil {
-				fmt.Fprintf(os.Stderr,"Error : Expected Integer : %s\n",err)
+	
+		lines := strings.Split(strings.TrimSpace(string(content)), "\n")
+		total := len(lines)
+	
+		start := 0
+	
+		if len(args) > 0 {
+			n, err := strconv.Atoi(args[0])
+			if err != nil || n < 0 {
+				fmt.Fprintf(os.Stderr, "Error: expected positive integer\n")
 				return
 			}
+	
+			if n < total {
+				start = total - n
+			}
 		}
-
-		i := 0
-		for scanner.Scan() {
-			i++
-			if(i >= j){fmt.Printf("	%d  %s\n",i,scanner.Text())}
+	
+		for i := start; i < total; i++ {
+			fmt.Printf("\t%d  %s\n", i+1, lines[i])
 		}
 	})
+	
 }
