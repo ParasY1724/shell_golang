@@ -1,6 +1,7 @@
 package history
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"strconv"
@@ -9,32 +10,89 @@ import (
 )
 
 type HistoryStruct struct {
-	history []string
-	lock    sync.RWMutex
-	index int
+	history      []string
+	lock         sync.RWMutex
+	index        int
+	lastSavedIdx int 
 }
 
-func (h *HistoryStruct) LoadHistory() {
+func (h *HistoryStruct) LoadFile(path string) {
+	if path == "" {
+		return
+	}
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	content, err := os.ReadFile(".go_shell_history")
+	file, err := os.Open(path)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "Error reading history file: %v\n", err)
-		}
-		return
+		return 
 	}
+	defer file.Close()
 
-	rawLines := strings.Split(strings.TrimSpace(string(content)), "\n")
-	
-	h.history = make([]string, 0, len(rawLines))
-	for _, line := range rawLines {
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
 		if line != "" {
 			h.history = append(h.history, line)
 		}
 	}
 	h.index = len(h.history)
+}
+
+func (h *HistoryStruct) InitFromFile(path string) {
+	h.LoadFile(path)
+	h.lock.Lock()
+	h.lastSavedIdx = len(h.history)
+	h.lock.Unlock()
+}
+
+func (h *HistoryStruct) WriteFile(path string) {
+	if path == "" {
+		return
+	}
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
+	file, err := os.Create(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing history file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for _, cmd := range h.history {
+		writer.WriteString(cmd + "\n")
+	}
+	writer.Flush()
+	
+}
+
+func (h *HistoryStruct) AppendNew(path string) {
+	if path == "" {
+		return
+	}
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	if h.lastSavedIdx >= len(h.history) {
+		return
+	}
+
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error appending history file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for i := h.lastSavedIdx; i < len(h.history); i++ {
+		writer.WriteString(h.history[i] + "\n")
+	}
+	writer.Flush()
+
+	h.lastSavedIdx = len(h.history)
 }
 
 func (h *HistoryStruct) ReadHistory(n string) {
@@ -73,25 +131,6 @@ func (h *HistoryStruct) Add(cmd string) {
 	h.index = len(h.history)
 }
 
-func (h *HistoryStruct) Save(cmd string) {
-	if strings.TrimSpace(cmd) == "" {
-		return
-	}
-
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	file, err := os.OpenFile(".go_shell_history", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error Writing History File : %s\n", err)
-		return
-	}
-	defer file.Close()
-
-	if _, err := file.WriteString(cmd + "\n"); err != nil {
-		fmt.Fprintf(os.Stderr, "Error Writing History File : %s\n", err)
-	}
-}
 
 func (h *HistoryStruct) GetUpEntry() (string, bool) {
 	h.lock.Lock()
@@ -106,11 +145,11 @@ func (h *HistoryStruct) GetUpEntry() (string, bool) {
 }
 
 func (h *HistoryStruct) GetDownEntry() (string, bool) {
-	h.lock.Lock() 
+	h.lock.Lock()
 	defer h.lock.Unlock()
 
 	if h.index >= len(h.history) {
-		return "", false 
+		return "", false
 	}
 
 	h.index++

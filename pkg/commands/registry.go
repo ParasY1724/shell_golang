@@ -61,20 +61,21 @@ func (t *Trie) collect(node *TrieNode) []string {
 }
 
 type Registry struct {
-	Builtins map[string]CmdFunc
-	CmdTrie  *Trie 
-	History *history.HistoryStruct
+	Builtins   map[string]CmdFunc
+	CmdTrie    *Trie
+	History    *history.HistoryStruct
+	ExitSignal bool
 }
 
 func NewRegistry() *Registry {
 	r := &Registry{
 		Builtins: make(map[string]CmdFunc),
 		CmdTrie:  NewTrie(),
-		History: &history.HistoryStruct{},
+		History:  &history.HistoryStruct{},
 	}
 	r.registerBuiltins()
 	r.loadPathExecutables()
-	r.History.LoadHistory()
+
 	return r
 }
 
@@ -109,11 +110,11 @@ func (r *Registry) loadPathExecutables() {
 
 func (r *Registry) Suggest(prefix string) ([]string, bool) {
 	candidates := r.CmdTrie.SearchPrefix(prefix)
-	
+
 	if len(candidates) == 0 {
-		return []string{""} , false
+		return []string{""}, false
 	}
-	
+
 	sort.Strings(candidates)
 
 	return candidates, true
@@ -126,7 +127,7 @@ func (r *Registry) registerBuiltins() {
 	}
 
 	add("exit", func(args []string) {
-		os.Exit(0)
+		r.ExitSignal = true
 	})
 
 	add("echo", func(args []string) {
@@ -167,7 +168,7 @@ func (r *Registry) registerBuiltins() {
 				dir = args[1]
 			}
 		}
-		
+
 		files, err := os.ReadDir(dir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ls: %s: No such file or directory\n", dir)
@@ -211,11 +212,25 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	add("history", func(args []string) {
-		arg := ""
 		if len(args) > 0 {
-			arg = args[0]
+
+			arg := args[0]
+			if len(args) >= 2 && (arg == "-r" || arg == "-w" || arg == "-a") {
+				path := args[1]
+				switch arg {
+				case "-r":
+					r.History.LoadFile(path)
+				case "-w":
+					r.History.WriteFile(path)
+				case "-a":
+					r.History.AppendNew(path)
+				}
+				return
+			}
+			r.History.ReadHistory(arg)
+		} else {
+			r.History.ReadHistory("")
 		}
-		r.History.ReadHistory(arg)
 	})
-	
+
 }

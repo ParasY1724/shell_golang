@@ -17,18 +17,18 @@ import (
 
 var builtinLock sync.Mutex
 
-
-
 func main() {
-	err := os.Remove(".go_shell_history") //clearing for next test cases
-
 	registry := commands.NewRegistry()
+
+	histFile := os.Getenv("HISTFILE")
+	if histFile != "" {
+		registry.History.InitFromFile(histFile)
+	}
 
 	oldState, err := term.EnableRawMode(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
 	}
-
 	defer term.RestoreTerminal(int(os.Stdin.Fd()), oldState)
 
 	reader := bufio.NewReader(os.Stdin)
@@ -128,7 +128,6 @@ func main() {
 		cmdLine := strings.TrimSpace(line.String())
 
 		registry.History.Add(cmdLine)
-		go registry.History.Save(cmdLine)
 		
 		allParts := parser.ParseInput(cmdLine)
 		if len(allParts) == 0 {
@@ -246,10 +245,6 @@ func main() {
 
 					if fn, ok := registry.Builtins[thisCmdName]; ok {
 
-						// === BUILTIN HANDLING ===
-						// Builtins use fmt.Print, which writes to the global os.Stdout.
-						// We must strictly lock and swap os.Stdout.
-						
 						builtinLock.Lock()
 						defer builtinLock.Unlock()
 
@@ -298,5 +293,12 @@ func main() {
 		}
 
 		wg.Wait()
+
+		if registry.ExitSignal {
+			if histFile != "" {
+				registry.History.WriteFile(histFile)
+			}
+			return  
+		}
 	}
 }
