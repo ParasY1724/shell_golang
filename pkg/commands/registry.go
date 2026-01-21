@@ -5,8 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"sort"
-	"strconv"
 	"strings"
+
+	"github.com/codecrafters-io/shell-starter-go/pkg/history"
 )
 
 type CmdFunc func([]string)
@@ -62,15 +63,18 @@ func (t *Trie) collect(node *TrieNode) []string {
 type Registry struct {
 	Builtins map[string]CmdFunc
 	CmdTrie  *Trie 
+	History *history.HistoryStruct
 }
 
 func NewRegistry() *Registry {
 	r := &Registry{
 		Builtins: make(map[string]CmdFunc),
 		CmdTrie:  NewTrie(),
+		History: &history.HistoryStruct{},
 	}
 	r.registerBuiltins()
 	r.loadPathExecutables()
+	r.History.LoadHistory()
 	return r
 }
 
@@ -207,32 +211,11 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	add("history", func(args []string) {
-		content, err := os.ReadFile(".go_shell_history")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading history file: %v\n", err)
-			return
-		}
-	
-		lines := strings.Split(strings.TrimSpace(string(content)), "\n")
-		total := len(lines)
-	
-		start := 0
-	
+		arg := ""
 		if len(args) > 0 {
-			n, err := strconv.Atoi(args[0])
-			if err != nil || n < 0 {
-				fmt.Fprintf(os.Stderr, "Error: expected positive integer\n")
-				return
-			}
-	
-			if n < total {
-				start = total - n
-			}
+			arg = args[0]
 		}
-	
-		for i := start; i < total; i++ {
-			fmt.Printf("\t%d  %s\n", i+1, lines[i])
-		}
+		r.History.ReadHistory(arg)
 	})
 	
 }

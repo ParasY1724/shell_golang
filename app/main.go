@@ -86,13 +86,36 @@ func main() {
 						fmt.Print("\x07")
 					}
 				}
-
 			case 127: // BACKSPACE
 				if line.Len() > 0 {
 					s := line.String()
 					line.Reset()
 					line.WriteString(s[:len(s)-1])
 					fmt.Print("\b \b")
+				}
+
+			case 27: // Esc
+				if b1, err := reader.ReadByte(); err == nil && b1 == '[' {
+					if b2, err := reader.ReadByte(); err == nil {
+						var histCmd string
+						var ok bool
+
+						switch b2 {
+						case 'A': // UP ARROW
+							histCmd, ok = registry.History.GetUpEntry()
+						case 'B': // DOWN ARROW
+							histCmd, ok = registry.History.GetDownEntry()
+						}
+
+						if !ok {
+							fmt.Print("\x07")
+						} else {
+							fmt.Print("\033[2K\r$ ") // \033[2K clears line, \r moves cursor to start
+							line.Reset()
+							line.WriteString(histCmd)
+							fmt.Print(histCmd)
+						}
+					}
 				}
 
 			default:
@@ -103,7 +126,7 @@ func main() {
 
 	EXECUTE:
 		cmdLine := strings.TrimSpace(line.String())
-		utils.WriteHistory(cmdLine)
+		go registry.History.WriteHistory(cmdLine)
 		allParts := parser.ParseInput(cmdLine)
 		if len(allParts) == 0 {
 			continue
