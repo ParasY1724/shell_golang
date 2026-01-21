@@ -20,14 +20,15 @@ var builtinLock sync.Mutex
 
 
 func main() {
-	os.Create(".go_shell_history") //clearing for next test cases
+	err := os.Remove(".go_shell_history") //clearing for next test cases
+
 	registry := commands.NewRegistry()
 
 	oldState, err := term.EnableRawMode(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
 	}
-	defer os.Create(".go_shell_history") 
+
 	defer term.RestoreTerminal(int(os.Stdin.Fd()), oldState)
 
 	reader := bufio.NewReader(os.Stdin)
@@ -102,7 +103,7 @@ func main() {
 
 	EXECUTE:
 		cmdLine := strings.TrimSpace(line.String())
-		go utils.WriteHistory(cmdLine)
+		utils.WriteHistory(cmdLine)
 		allParts := parser.ParseInput(cmdLine)
 		if len(allParts) == 0 {
 			continue
