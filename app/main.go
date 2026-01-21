@@ -20,6 +20,12 @@ var builtinLock sync.Mutex
 func main() {
 	registry := commands.NewRegistry()
 
+	// Capture the original standard streams safely.
+	// We use these defaults inside goroutines to avoid reading the
+	// global os.Stdout/os.Stdin, which might be temporarily swapped by builtins.
+	standardInput := os.Stdin
+	standardOutput := os.Stdout
+
 	histFile := os.Getenv("HISTFILE")
 	if histFile != "" {
 		registry.History.InitFromFile(histFile)
@@ -128,7 +134,7 @@ func main() {
 		cmdLine := strings.TrimSpace(line.String())
 
 		registry.History.Add(cmdLine)
-		
+
 		allParts := parser.ParseInput(cmdLine)
 		if len(allParts) == 0 {
 			continue
@@ -233,12 +239,12 @@ func main() {
 				}
 
 				run := func() {
-					var effectiveStdin *os.File = os.Stdin
+					var effectiveStdin *os.File = standardInput
 					if thisPrevPipe != nil {
 						effectiveStdin = thisPrevPipe
 					}
 
-					var effectiveStdout *os.File = os.Stdout
+					var effectiveStdout *os.File = standardOutput
 					if thisNextPipeWriter != nil {
 						effectiveStdout = thisNextPipeWriter
 					}
@@ -261,11 +267,8 @@ func main() {
 
 						fn(thisArgs)
 
-						os.Stdout = oldStdout
-						os.Stdin = oldStdin
-
 					} else if _, err := exec.LookPath(thisCmdName); err == nil {
-						
+
 						c := exec.Command(thisCmdName, thisArgs...)
 						c.Stdin = effectiveStdin
 						c.Stdout = effectiveStdout
@@ -298,7 +301,7 @@ func main() {
 			if histFile != "" {
 				registry.History.WriteFile(histFile)
 			}
-			return  
+			return
 		}
 	}
 }
