@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/codecrafters-io/shell-starter-go/pkg/commands"
-	"github.com/codecrafters-io/shell-starter-go/pkg/executor"
 	"github.com/codecrafters-io/shell-starter-go/pkg/parser"
 	"github.com/codecrafters-io/shell-starter-go/pkg/term"
 	"github.com/codecrafters-io/shell-starter-go/pkg/utils"
@@ -150,6 +149,7 @@ func main() {
 			pipelineCmds = append(pipelineCmds, currentCmd)
 		}
 
+		//  Prepare for Pipeline Execution
 		var prevPipeReader *os.File = nil
 		var wg sync.WaitGroup
 
@@ -158,14 +158,10 @@ func main() {
 				continue
 			}
 
-			redirectOut := false
-			redirectErr := false
-			appendOut := false
-			appendErr := false
 			var outFile, errFile string
-
+			redirectOut, redirectErr, appendOut, appendErr := false, false, false, false
+			
 			args := parts
-			// Handle Redirection parsing
 			if len(args) >= 3 {
 				op := args[len(args)-2]
 				file := args[len(args)-1]
@@ -208,93 +204,106 @@ func main() {
 				}
 			}
 
-			var effectiveStdin *os.File = os.Stdin
+			effectiveStdin := os.Stdin
 			if prevPipeReader != nil {
 				effectiveStdin = prevPipeReader
 			}
 
-			var effectiveStdout *os.File = os.Stdout
+			effectiveStdout := os.Stdout
 			if nextPipeWriter != nil {
 				effectiveStdout = nextPipeWriter
 			}
-
-			thisCmdName := cmdName
-			thisArgs := cmdArgs
-			thisStdin := effectiveStdin
-			thisStdout := effectiveStdout
 			
-			// Flags for closure
-			isRedirectOut := redirectOut
-			isRedirectErr := redirectErr
-			fOut := outFile
-			fErr := errFile
-			isAppOut := appendOut
-			isAppErr := appendErr
+			var fOut, fErr *os.File
+			
+			execStdin := effectiveStdin
+			execStdout := effectiveStdout
+			execStderr := os.Stderr
 
-			closeStdin := (prevPipeReader != nil)
-			closeStdout := (nextPipeWriter != nil)
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
-				if closeStdin && thisStdin != nil {
-					defer thisStdin.Close()
-				}
-				if closeStdout && thisStdout != nil {
-					defer thisStdout.Close()
-				}
-
-				run := func() {
-					if fn, ok := registry.Builtins[thisCmdName]; ok {
-						builtinLock.Lock()
-						
-						defer builtinLock.Unlock()
-
-						oldStdout := os.Stdout
-						oldStdin := os.Stdin
-
-						defer func() {
-							os.Stdout = oldStdout
-							os.Stdin = oldStdin
-						}()
-
-						os.Stdout = thisStdout
-						os.Stdin = thisStdin
-
-						fn(thisArgs)
-					} else if _, err := exec.LookPath(thisCmdName); err == nil {
-						c := exec.Command(thisCmdName, thisArgs...)
-						c.Stdin = thisStdin
-						c.Stdout = thisStdout
-						c.Stderr = os.Stderr
-						c.Run()
-					} else {
-						fmt.Printf("%s: command not found\n", thisCmdName)
-					}
-				}
-
-				if isRedirectOut && isRedirectErr {
-					executor.WithStdRedirect(fOut, isAppOut, false, func() {
-						executor.WithStdRedirect(fErr, isAppErr, true, run)
-					})
-				} else if isRedirectOut {
-					executor.WithStdRedirect(fOut, isAppOut, false, run)
-				} else if isRedirectErr {
-					executor.WithStdRedirect(fErr, isAppErr, true, run)
+			if redirectOut {
+				flags := os.O_CREATE | os.O_WRONLY
+				if appendOut {
+					flags |= os.O_APPEND
 				} else {
-					run()
+					flags |= os.O_TRUNC
 				}
-			}()
+				fOut, err = os.OpenFile(outFile, flags, 0644)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%v\n", err)
+				} else {
+					execStdout = fOut
+				}
+			}
 
-			// PARENT THREAD MANAGEMENT
-			// Crucial: The parent must close its copies of the pipes.
-			// We are done with prevPipeReader (passed to child).
+			if redirectErr {
+				flags := os.O_CREATE | os.O_WRONLY
+				if appendErr {
+					flags |= os.O_APPEND
+				} else {
+					flags |= os.O_TRUNC
+				}
+				fErr, err = os.OpenFile(errFile, flags, 0644)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%v\n", err)
+				} else {
+					execStderr = fErr
+				}
+			}
+
+			if fn, ok := registry.Builtins[cmdName]; ok {
+				wg.Add(1)
+				go func(in, out *os.File, args []string, fn commands.CmdFunc) {
+					defer wg.Done()
+					builtinLock.Lock()
+					defer builtinLock.Unlock()
+
+					oldStdout := os.Stdout
+					oldStdin := os.Stdin
+					oldStderr := os.Stderr
+
+					defer func() {
+						os.Stdout = oldStdout
+						os.Stdin = oldStdin
+						os.Stderr = oldStderr
+						if fOut != nil { fOut.Close() }
+						if fErr != nil { fErr.Close() }
+					}()
+
+					if in != nil { os.Stdin = in }
+					if out != nil { os.Stdout = out }
+					if execStderr != nil { os.Stderr = execStderr }
+
+					fn(args)
+				}(execStdin, execStdout, cmdArgs, fn)
+
+			} else {
+				cmd := exec.Command(cmdName, cmdArgs...)
+				cmd.Stdin = execStdin
+				cmd.Stdout = execStdout
+				cmd.Stderr = execStderr
+
+				if err := cmd.Start(); err != nil {
+					fmt.Printf("%s: command not found\n", cmdName)
+				} else {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+						cmd.Wait()
+						if fOut != nil { fOut.Close() }
+						if fErr != nil { fErr.Close() }
+					}()
+				}
+			}
+
+			// PARENT CLEANUP 
+			// We must close the pipe ends that we passed to the child.
+			// If we don't, the child writer will finish, but the reader (next cmd)
+			// will still see this parent process holding the write-end open,
+			// preventing EOF.
+			
 			if prevPipeReader != nil {
 				prevPipeReader.Close()
 			}
-			// We are done with nextPipeWriter (passed to child).
-			// If we don't close this, the next command (reader) will never get EOF.
 			if nextPipeWriter != nil {
 				nextPipeWriter.Close()
 			}
