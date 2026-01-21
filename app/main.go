@@ -6,8 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/codecrafters-io/shell-starter-go/pkg/commands"
 	"github.com/codecrafters-io/shell-starter-go/pkg/parser"
@@ -15,7 +13,6 @@ import (
 	"github.com/codecrafters-io/shell-starter-go/pkg/utils"
 )
 
-var builtinLock sync.Mutex
 
 func main() {
 	registry := commands.NewRegistry()
@@ -152,7 +149,6 @@ func main() {
 
 		//  Prepare for Pipeline Execution
 		var prevPipeReader *os.File = nil
-		var wg sync.WaitGroup
 
 		for i, parts := range pipelineCmds {
 			if len(parts) == 0 {
@@ -254,14 +250,10 @@ func main() {
 			}
 
 			if fn, ok := registry.Builtins[cmdName]; ok {
-				wg.Add(1)
-				go func(in, out, errFile *os.File, args []string, fn commands.CmdFunc) {
-					defer wg.Done()
+				func(in, out, errFile *os.File, args []string, fn commands.CmdFunc) {
 					
 					defer closeResources(in, out, errFile)
 
-					builtinLock.Lock()
-					defer builtinLock.Unlock()
 
 					oldStdout := os.Stdout
 					oldStdin := os.Stdin
@@ -278,7 +270,6 @@ func main() {
 					if errFile != nil { os.Stderr = errFile }
 
 					fn(args)
-					time.Sleep(2 * time.Second)
 				}(execStdin, execStdout, execStderr, cmdArgs, fn)
 				
 
@@ -294,10 +285,7 @@ func main() {
 				} else {
 					closeResources(execStdin, execStdout, execStderr)
 
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						time.Sleep(2 * time.Second)
+					func() {
 						cmd.Wait()
 					}()
 				}
@@ -306,7 +294,6 @@ func main() {
 			prevPipeReader = nextPipeReader
 		}
 
-		wg.Wait()
 
 		if registry.ExitSignal {
 			if histFile != "" {
