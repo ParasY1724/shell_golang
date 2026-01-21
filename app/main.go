@@ -261,9 +261,6 @@ func main() {
 
 						fn(thisArgs)
 
-						os.Stdout = oldStdout
-						os.Stdin = oldStdin
-
 					} else if _, err := exec.LookPath(thisCmdName); err == nil {
 						
 						c := exec.Command(thisCmdName, thisArgs...)
