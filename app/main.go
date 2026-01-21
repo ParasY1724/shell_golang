@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/codecrafters-io/shell-starter-go/pkg/commands"
 	"github.com/codecrafters-io/shell-starter-go/pkg/parser"
@@ -277,6 +278,7 @@ func main() {
 					if errFile != nil { os.Stderr = errFile }
 
 					fn(args)
+					time.Sleep(2 * time.Second)
 				}(execStdin, execStdout, execStderr, cmdArgs, fn)
 				
 
@@ -295,6 +297,7 @@ func main() {
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
+						time.Sleep(2 * time.Second)
 						cmd.Wait()
 					}()
 				}
