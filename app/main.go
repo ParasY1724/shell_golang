@@ -228,6 +228,11 @@ func main() {
 						oldStdout := os.Stdout
 						oldStdin := os.Stdin
 
+						defer func() {
+							os.Stdout = oldStdout
+							os.Stdin = oldStdin
+						}()
+
 						os.Stdout = effectiveStdout
 						os.Stdin = effectiveStdin
 
