@@ -56,6 +56,15 @@ func ParseInput(line string) []string {
 			continue
 		}
 
+		if ch == '|' && !inSingle && !inDouble {
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+			args = append(args, "|")
+			continue
+		}
+
 		current.WriteByte(ch)
 	}
 
