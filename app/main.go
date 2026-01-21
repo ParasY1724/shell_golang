@@ -128,7 +128,7 @@ func main() {
 		cmdLine := strings.TrimSpace(line.String())
 
 		registry.History.Add(cmdLine)
-		
+
 		allParts := parser.ParseInput(cmdLine)
 		if len(allParts) == 0 {
 			continue
@@ -150,7 +150,6 @@ func main() {
 			pipelineCmds = append(pipelineCmds, currentCmd)
 		}
 
-		//  Prepare for Pipeline Execution
 		var prevPipeReader *os.File = nil
 		var wg sync.WaitGroup
 
@@ -166,6 +165,7 @@ func main() {
 			var outFile, errFile string
 
 			args := parts
+			// Handle Redirection parsing
 			if len(args) >= 3 {
 				op := args[len(args)-2]
 				file := args[len(args)-1]
@@ -208,12 +208,22 @@ func main() {
 				}
 			}
 
+			var effectiveStdin *os.File = os.Stdin
+			if prevPipeReader != nil {
+				effectiveStdin = prevPipeReader
+			}
+
+			var effectiveStdout *os.File = os.Stdout
+			if nextPipeWriter != nil {
+				effectiveStdout = nextPipeWriter
+			}
+
 			thisCmdName := cmdName
 			thisArgs := cmdArgs
-			thisPrevPipe := prevPipeReader
-			thisNextPipeWriter := nextPipeWriter
-			thisNextPipeReader := nextPipeReader
-
+			thisStdin := effectiveStdin
+			thisStdout := effectiveStdout
+			
+			// Flags for closure
 			isRedirectOut := redirectOut
 			isRedirectErr := redirectErr
 			fOut := outFile
@@ -221,31 +231,24 @@ func main() {
 			isAppOut := appendOut
 			isAppErr := appendErr
 
+			closeStdin := (prevPipeReader != nil)
+			closeStdout := (nextPipeWriter != nil)
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 
-				if thisPrevPipe != nil {
-					defer thisPrevPipe.Close()
+				if closeStdin && thisStdin != nil {
+					defer thisStdin.Close()
 				}
-				if thisNextPipeWriter != nil {
-					defer thisNextPipeWriter.Close()
+				if closeStdout && thisStdout != nil {
+					defer thisStdout.Close()
 				}
 
 				run := func() {
-					var effectiveStdin *os.File = os.Stdin
-					if thisPrevPipe != nil {
-						effectiveStdin = thisPrevPipe
-					}
-
-					var effectiveStdout *os.File = os.Stdout
-					if thisNextPipeWriter != nil {
-						effectiveStdout = thisNextPipeWriter
-					}
-
 					if fn, ok := registry.Builtins[thisCmdName]; ok {
-
 						builtinLock.Lock()
+						
 						defer builtinLock.Unlock()
 
 						oldStdout := os.Stdout
@@ -256,19 +259,14 @@ func main() {
 							os.Stdin = oldStdin
 						}()
 
-						os.Stdout = effectiveStdout
-						os.Stdin = effectiveStdin
+						os.Stdout = thisStdout
+						os.Stdin = thisStdin
 
 						fn(thisArgs)
-
-						os.Stdout = oldStdout
-						os.Stdin = oldStdin
-
 					} else if _, err := exec.LookPath(thisCmdName); err == nil {
-						
 						c := exec.Command(thisCmdName, thisArgs...)
-						c.Stdin = effectiveStdin
-						c.Stdout = effectiveStdout
+						c.Stdin = thisStdin
+						c.Stdout = thisStdout
 						c.Stderr = os.Stderr
 						c.Run()
 					} else {
@@ -289,7 +287,19 @@ func main() {
 				}
 			}()
 
-			prevPipeReader = thisNextPipeReader
+			// PARENT THREAD MANAGEMENT
+			// Crucial: The parent must close its copies of the pipes.
+			// We are done with prevPipeReader (passed to child).
+			if prevPipeReader != nil {
+				prevPipeReader.Close()
+			}
+			// We are done with nextPipeWriter (passed to child).
+			// If we don't close this, the next command (reader) will never get EOF.
+			if nextPipeWriter != nil {
+				nextPipeWriter.Close()
+			}
+
+			prevPipeReader = nextPipeReader
 		}
 
 		wg.Wait()
@@ -298,7 +308,7 @@ func main() {
 			if histFile != "" {
 				registry.History.WriteFile(histFile)
 			}
-			return  
+			return
 		}
 	}
 }
