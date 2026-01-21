@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"sort"
@@ -61,18 +60,15 @@ func (t *Trie) collect(node *TrieNode) []string {
 
 type Registry struct {
 	Builtins map[string]CmdFunc
-	ExtCmds  map[string]CmdFunc
 	CmdTrie  *Trie 
 }
 
 func NewRegistry() *Registry {
 	r := &Registry{
 		Builtins: make(map[string]CmdFunc),
-		ExtCmds:  make(map[string]CmdFunc),
 		CmdTrie:  NewTrie(),
 	}
 	r.registerBuiltins()
-	r.registerExt()
 	r.loadPathExecutables()
 	return r
 }
@@ -206,29 +202,6 @@ func (r *Registry) registerBuiltins() {
 
 		if err := os.Chdir(dir); err != nil {
 			fmt.Fprintln(os.Stderr, err)
-		}
-	})
-}
-
-func (r *Registry) registerExt() {
-	add := func(name string, fn CmdFunc) {
-		r.ExtCmds[name] = fn
-		r.CmdTrie.Insert(name)
-	}
-
-	add("cat", func(args []string) {
-		for _, filename := range args {
-			f, err := os.Open(filename)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "cat: %s: No such file or directory\n", filename)
-				continue
-			}
-
-			_, err = io.Copy(os.Stdout, f)
-			f.Close()
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "cat: %s: read error\n", filename)
-			}
 		}
 	})
 }
