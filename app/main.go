@@ -126,7 +126,7 @@ func main() {
 
 	EXECUTE:
 		cmdLine := strings.TrimSpace(line.String())
-		go registry.History.WriteHistory(cmdLine)
+		registry.History.WriteHistory(cmdLine)
 		allParts := parser.ParseInput(cmdLine)
 		if len(allParts) == 0 {
 			continue
