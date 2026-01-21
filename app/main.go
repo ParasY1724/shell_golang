@@ -204,20 +204,16 @@ func main() {
 				}
 			}
 
-			effectiveStdin := os.Stdin
+			execStdin := os.Stdin
 			if prevPipeReader != nil {
-				effectiveStdin = prevPipeReader
+				execStdin = prevPipeReader
 			}
 
-			effectiveStdout := os.Stdout
+			execStdout := os.Stdout
 			if nextPipeWriter != nil {
-				effectiveStdout = nextPipeWriter
+				execStdout = nextPipeWriter
 			}
 			
-			var fOut, fErr *os.File
-			
-			execStdin := effectiveStdin
-			execStdout := effectiveStdout
 			execStderr := os.Stderr
 
 			if redirectOut {
@@ -227,11 +223,11 @@ func main() {
 				} else {
 					flags |= os.O_TRUNC
 				}
-				fOut, err = os.OpenFile(outFile, flags, 0644)
+				f, err := os.OpenFile(outFile, flags, 0644)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%v\n", err)
 				} else {
-					execStdout = fOut
+					execStdout = f
 				}
 			}
 
@@ -242,18 +238,27 @@ func main() {
 				} else {
 					flags |= os.O_TRUNC
 				}
-				fErr, err = os.OpenFile(errFile, flags, 0644)
+				f, err := os.OpenFile(errFile, flags, 0644)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%v\n", err)
 				} else {
-					execStderr = fErr
+					execStderr = f
 				}
+			}
+
+			closeResources := func(in, out, errFile *os.File) {
+				if in != os.Stdin && in != nil { in.Close() }
+				if out != os.Stdout && out != nil { out.Close() }
+				if errFile != os.Stderr && errFile != nil { errFile.Close() }
 			}
 
 			if fn, ok := registry.Builtins[cmdName]; ok {
 				wg.Add(1)
-				go func(in, out *os.File, args []string, fn commands.CmdFunc) {
+				go func(in, out, errFile *os.File, args []string, fn commands.CmdFunc) {
 					defer wg.Done()
+					
+					defer closeResources(in, out, errFile)
+
 					builtinLock.Lock()
 					defer builtinLock.Unlock()
 
@@ -265,16 +270,15 @@ func main() {
 						os.Stdout = oldStdout
 						os.Stdin = oldStdin
 						os.Stderr = oldStderr
-						if fOut != nil { fOut.Close() }
-						if fErr != nil { fErr.Close() }
 					}()
 
 					if in != nil { os.Stdin = in }
 					if out != nil { os.Stdout = out }
-					if execStderr != nil { os.Stderr = execStderr }
+					if errFile != nil { os.Stderr = errFile }
 
 					fn(args)
-				}(execStdin, execStdout, cmdArgs, fn)
+				}(execStdin, execStdout, execStderr, cmdArgs, fn)
+				
 
 			} else {
 				cmd := exec.Command(cmdName, cmdArgs...)
@@ -284,28 +288,16 @@ func main() {
 
 				if err := cmd.Start(); err != nil {
 					fmt.Printf("%s: command not found\n", cmdName)
+					closeResources(execStdin, execStdout, execStderr)
 				} else {
+					closeResources(execStdin, execStdout, execStderr)
+
 					wg.Add(1)
 					go func() {
 						defer wg.Done()
 						cmd.Wait()
-						if fOut != nil { fOut.Close() }
-						if fErr != nil { fErr.Close() }
 					}()
 				}
-			}
-
-			// PARENT CLEANUP 
-			// We must close the pipe ends that we passed to the child.
-			// If we don't, the child writer will finish, but the reader (next cmd)
-			// will still see this parent process holding the write-end open,
-			// preventing EOF.
-			
-			if prevPipeReader != nil {
-				prevPipeReader.Close()
-			}
-			if nextPipeWriter != nil {
-				nextPipeWriter.Close()
 			}
 
 			prevPipeReader = nextPipeReader
