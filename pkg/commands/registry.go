@@ -131,7 +131,7 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	add("echo", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
-		fmt.Println(stdout,strings.Join(args, " "))
+		fmt.Fprintln(stdout,strings.Join(args, " "))
 	})
 
 	add("type", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
