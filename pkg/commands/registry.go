@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"sort"
@@ -10,8 +11,7 @@ import (
 	"github.com/codecrafters-io/shell-starter-go/pkg/history"
 )
 
-type CmdFunc func([]string)
-
+type CmdFunc func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
 type TrieNode struct {
 	children map[rune]*TrieNode
 	isEnd    bool
@@ -126,39 +126,39 @@ func (r *Registry) registerBuiltins() {
 		r.CmdTrie.Insert(name)
 	}
 
-	add("exit", func(args []string) {
-		r.ExitSignal = true
+	add("exit", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
+			r.ExitSignal = true
 	})
 
-	add("echo", func(args []string) {
-		fmt.Println(strings.Join(args, " "))
+	add("echo", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
+		fmt.Println(stdout,strings.Join(args, " "))
 	})
 
-	add("type", func(args []string) {
+	add("type", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
 		if len(args) == 0 {
-			fmt.Fprintln(os.Stderr, "type: missing operand")
+			fmt.Fprintln(stderr, "type: missing operand")
 			return
 		}
 		cmd := args[0]
 		if _, ok := r.Builtins[cmd]; ok {
-			fmt.Printf("%s is a shell builtin\n", cmd)
+			fmt.Fprintf(stdout, "%s is a shell builtin\n", cmd)
 		} else if execPath, err := exec.LookPath(cmd); err == nil {
-			fmt.Printf("%s is %s\n", cmd, execPath)
+			fmt.Fprintf(stdout, "%s is %s\n", cmd, execPath)
 		} else {
-			fmt.Fprintf(os.Stderr, "%s: not found\n", cmd)
+			fmt.Fprintf(stderr, "%s: not found\n", cmd)
 		}
 	})
 
-	add("pwd", func(args []string) {
+	add("pwd", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
 		dir, err := os.Getwd()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(stderr, err)
 			return
 		}
-		fmt.Println(dir)
+		fmt.Fprintln(stdout, dir)
 	})
 
-	add("ls", func(args []string) {
+	add("ls", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
 		dir := "."
 		if len(args) > 0 {
 			dir = args[0]
@@ -166,23 +166,25 @@ func (r *Registry) registerBuiltins() {
 		if dir == "-1" {
 			if len(args) > 1 {
 				dir = args[1]
+			} else {
+				dir = "."
 			}
 		}
 
 		files, err := os.ReadDir(dir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ls: %s: No such file or directory\n", dir)
+			fmt.Fprintf(stderr, "ls: %s: No such file or directory\n", dir)
 			return
 		}
 
 		for _, file := range files {
-			fmt.Println(file.Name())
+			fmt.Fprintln(stdout, file.Name()) // Writes to pipe if connected
 		}
 	})
 
-	add("cd", func(args []string) {
+	add("cd", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
 		if len(args) == 0 {
-			fmt.Fprintln(os.Stderr, "cd: missing argument")
+			fmt.Fprintln(stderr, "cd: missing argument")
 			return
 		}
 
@@ -191,27 +193,27 @@ func (r *Registry) registerBuiltins() {
 			if homeDir, er := os.UserHomeDir(); er == nil {
 				dir = strings.Replace(dir, "~", homeDir, 1)
 			} else {
-				fmt.Println(er)
+				fmt.Fprintln(stdout, er)
 			}
 		}
 
 		info, err := os.Stat(dir)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "cd: %s: No such file or directory\n", dir)
+			fmt.Fprintf(stderr, "cd: %s: No such file or directory\n", dir)
 			return
 		}
 
 		if !info.IsDir() {
-			fmt.Fprintf(os.Stderr, "cd: %s: Not a directory\n", dir)
+			fmt.Fprintf(stderr, "cd: %s: Not a directory\n", dir)
 			return
 		}
 
 		if err := os.Chdir(dir); err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(stderr, err)
 		}
 	})
 
-	add("history", func(args []string) {
+	add("history", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
 		if len(args) > 0 {
 
 			arg := args[0]
@@ -219,17 +221,17 @@ func (r *Registry) registerBuiltins() {
 				path := args[1]
 				switch arg {
 				case "-r":
-					r.History.LoadFile(path)
+					r.History.LoadFile(path,stderr)
 				case "-w":
-					r.History.WriteFile(path)
+					r.History.WriteFile(path,stderr)
 				case "-a":
-					r.History.AppendNew(path)
+					r.History.AppendNew(path,stderr)
 				}
 				return
 			}
-			r.History.ReadHistory(arg)
+			r.History.ReadHistory(arg,stdout,stderr)
 		} else {
-			r.History.ReadHistory("")
+			r.History.ReadHistory("",stdout,stderr)
 		}
 	})
 

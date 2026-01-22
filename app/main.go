@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -14,14 +15,13 @@ import (
 	"github.com/codecrafters-io/shell-starter-go/pkg/utils"
 )
 
-var builtinLock sync.Mutex
 
 func main() {
 	registry := commands.NewRegistry()
 
 	histFile := os.Getenv("HISTFILE")
 	if histFile != "" {
-		registry.History.InitFromFile(histFile)
+		registry.History.InitFromFile(histFile,os.Stderr)
 	}
 
 	oldState, err := term.EnableRawMode(int(os.Stdin.Fd()))
@@ -204,17 +204,20 @@ func main() {
 				}
 			}
 
-			execStdin := os.Stdin
+			var cmdStdin io.Reader = os.Stdin
 			if prevPipeReader != nil {
-				execStdin = prevPipeReader
+				cmdStdin = prevPipeReader
 			}
 
-			execStdout := os.Stdout
-			if nextPipeWriter != nil {
-				execStdout = nextPipeWriter
+			var cmdStdout io.Writer = os.Stdout
+			if  nextPipeWriter != nil {
+				cmdStdout = nextPipeWriter
 			}
-			
-			execStderr := os.Stderr
+
+			var cmdStderr io.Writer = os.Stderr
+
+			var fout,fErr *os.File
+
 
 			if redirectOut {
 				flags := os.O_CREATE | os.O_WRONLY
@@ -224,10 +227,11 @@ func main() {
 					flags |= os.O_TRUNC
 				}
 				f, err := os.OpenFile(outFile, flags, 0644)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "%v\n", err)
+				if err == nil {
+					fout = f
+					cmdStdout = f
 				} else {
-					execStdout = f
+					fmt.Fprintf(os.Stderr, "%v\n", err)
 				}
 			}
 
@@ -239,75 +243,62 @@ func main() {
 					flags |= os.O_TRUNC
 				}
 				f, err := os.OpenFile(errFile, flags, 0644)
-				if err != nil {
+				if err == nil {
+					fErr = f
+					cmdStderr = f
+				} else {
 					fmt.Fprintf(os.Stderr, "%v\n", err)
-				} else {
-					execStderr = f
 				}
 			}
 
-			closeResources := func(in, out, errFile *os.File) {
-				if in != os.Stdin && in != nil { in.Close() }
-				if out != os.Stdout && out != nil { out.Close() }
-				if errFile != os.Stderr && errFile != nil { errFile.Close() }
-			}
+			thisCmdName := cmdName
+			thisArgs := cmdArgs
+			thisStdin := cmdStdin
+			thisStdout := cmdStdout
+			thisStderr := cmdStderr
+			thisPrevPipe := prevPipeReader
+			thisNextPipeWriter := nextPipeWriter
+			thisFOut := fout
+			thisFErr := fErr
 
-			if fn, ok := registry.Builtins[cmdName]; ok {
-				wg.Add(1)
-				go func(in, out, errFile *os.File, args []string, fn commands.CmdFunc) {
-					defer wg.Done()
-					
-					defer closeResources(in, out, errFile)
-
-					builtinLock.Lock()
-					defer builtinLock.Unlock()
-
-					oldStdout := os.Stdout
-					oldStdin := os.Stdin
-					oldStderr := os.Stderr
-
-					defer func() {
-						os.Stdout = oldStdout
-						os.Stdin = oldStdin
-						os.Stderr = oldStderr
-					}()
-
-					if in != nil { os.Stdin = in }
-					if out != nil { os.Stdout = out }
-					if errFile != nil { os.Stderr = errFile }
-
-					fn(args)
-				}(execStdin, execStdout, execStderr, cmdArgs, fn)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 				
-
-			} else {
-				cmd := exec.Command(cmdName, cmdArgs...)
-				cmd.Stdin = execStdin
-				cmd.Stdout = execStdout
-				cmd.Stderr = execStderr
-
-				if err := cmd.Start(); err != nil {
-					fmt.Printf("%s: command not found\n", cmdName)
-					closeResources(execStdin, execStdout, execStderr)
-				} else {
-					closeResources(execStdin, execStdout, execStderr)
-
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-						cmd.Wait()
-					}()
+				// Close resources when done
+				if thisPrevPipe != nil {
+					defer thisPrevPipe.Close()
 				}
-			}
+				if thisNextPipeWriter != nil {
+					defer thisNextPipeWriter.Close()
+				}
+				if thisFOut != nil {
+					defer thisFOut.Close()
+				}
+				if thisFErr != nil {
+					defer thisFErr.Close()
+				}
+
+				if fn, ok := registry.Builtins[thisCmdName]; ok {
+					fn(thisArgs, thisStdin, thisStdout, thisStderr)
+				}else if _, err := exec.LookPath(thisCmdName); err == nil {
+					c := exec.Command(thisCmdName, thisArgs...)
+					c.Stdin = thisStdin
+					c.Stdout = thisStdout
+					c.Stderr = thisStderr
+					c.Run()
+				} else {
+					fmt.Fprintf(thisStderr, "%s: command not found\n", thisCmdName)
+				}
+			}()
 
 			prevPipeReader = nextPipeReader
 		}
 
 		wg.Wait()
-
 		if registry.ExitSignal {
 			if histFile != "" {
-				registry.History.WriteFile(histFile)
+				registry.History.WriteFile(histFile,os.Stderr)
 			}
 			return
 		}

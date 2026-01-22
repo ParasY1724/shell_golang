@@ -3,6 +3,7 @@ package history
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -16,7 +17,7 @@ type HistoryStruct struct {
 	lastSavedIdx int 
 }
 
-func (h *HistoryStruct) LoadFile(path string) {
+func (h *HistoryStruct) LoadFile(path string,stderr io.Writer) {
 	if path == "" {
 		return
 	}
@@ -25,6 +26,7 @@ func (h *HistoryStruct) LoadFile(path string) {
 
 	file, err := os.Open(path)
 	if err != nil {
+		fmt.Fprintf(stderr, "Error loading history file: %v\n", err)
 		return 
 	}
 	defer file.Close()
@@ -39,14 +41,14 @@ func (h *HistoryStruct) LoadFile(path string) {
 	h.index = len(h.history)
 }
 
-func (h *HistoryStruct) InitFromFile(path string) {
-	h.LoadFile(path)
+func (h *HistoryStruct) InitFromFile(path string,stderr io.Writer) {
+	h.LoadFile(path,stderr)
 	h.lock.Lock()
 	h.lastSavedIdx = len(h.history)
 	h.lock.Unlock()
 }
 
-func (h *HistoryStruct) WriteFile(path string) {
+func (h *HistoryStruct) WriteFile(path string , stderr io.Writer) {
 	if path == "" {
 		return
 	}
@@ -55,7 +57,7 @@ func (h *HistoryStruct) WriteFile(path string) {
 
 	file, err := os.Create(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing history file: %v\n", err)
+		fmt.Fprintf(stderr, "Error writing history file: %v\n", err)
 		return
 	}
 	defer file.Close()
@@ -68,7 +70,7 @@ func (h *HistoryStruct) WriteFile(path string) {
 	
 }
 
-func (h *HistoryStruct) AppendNew(path string) {
+func (h *HistoryStruct) AppendNew(path string, stderr io.Writer) {
 	if path == "" {
 		return
 	}
@@ -81,7 +83,7 @@ func (h *HistoryStruct) AppendNew(path string) {
 
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error appending history file: %v\n", err)
+		fmt.Fprintf(stderr, "Error appending history file: %v\n", err)
 		return
 	}
 	defer file.Close()
@@ -95,7 +97,7 @@ func (h *HistoryStruct) AppendNew(path string) {
 	h.lastSavedIdx = len(h.history)
 }
 
-func (h *HistoryStruct) ReadHistory(n string) {
+func (h *HistoryStruct) ReadHistory(n string,stdout io.Writer, stderr io.Writer) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 
@@ -105,7 +107,7 @@ func (h *HistoryStruct) ReadHistory(n string) {
 	if len(n) > 0 {
 		val, err := strconv.Atoi(n)
 		if err != nil || val < 0 {
-			fmt.Fprintf(os.Stderr, "history: numeric argument required\n")
+			fmt.Fprintf(stderr, "history: numeric argument required\n")
 			return
 		}
 
@@ -115,7 +117,7 @@ func (h *HistoryStruct) ReadHistory(n string) {
 	}
 
 	for i := start; i < total; i++ {
-		fmt.Printf("\t%d  %s\n", i+1, h.history[i])
+		fmt.Fprintf(stdout,"\t%d  %s\n", i+1, h.history[i])
 	}
 }
 
