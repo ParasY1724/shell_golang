@@ -6,8 +6,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/codecrafters-io/shell-starter-go/pkg/commands"
 	"github.com/codecrafters-io/shell-starter-go/pkg/parser"
@@ -29,6 +31,19 @@ func main() {
 		panic(err)
 	}
 	defer term.RestoreTerminal(int(os.Stdin.Fd()), oldState)
+
+	sigChan := make(chan os.Signal, 1) //SIGINT CTRL + C
+	signal.Notify(sigChan,os.Interrupt,syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		term.RestoreTerminal(int(os.Stdin.Fd()), oldState)
+		if histFile != "" {
+            registry.History.WriteFile(histFile, os.Stderr)
+        }
+		fmt.Print("\n")
+        os.Exit(0)
+	}()
 
 	reader := bufio.NewReader(os.Stdin)
 
