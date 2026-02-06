@@ -54,6 +54,12 @@ func (l *Lexer) NextToken() token.Token {
 		return tok
 	}
 
+	if l.ch == ';' {
+		tok = token.Token{Type: token.SEMICOLON, Literal: ";"}
+		l.readChar()
+		return tok
+	}
+
 	if isRedirectStart(l.ch) || (isDigit(l.ch) && (l.peekChar() == '>')) {
 		literal := l.readRedirect()
 		// Double check it wasn't just a number like "123"
@@ -71,8 +77,8 @@ func (l *Lexer) NextToken() token.Token {
 	}
 
 	tok.Literal = l.readWord()
-	
-	tok.Type = token.WORD
+
+	tok.Type = token.LookupIdent(tok.Literal)
 	return tok
 }
 

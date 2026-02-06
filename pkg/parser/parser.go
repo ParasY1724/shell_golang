@@ -27,7 +27,28 @@ func (p *Parser) nextToken() {
 }
 
 func (p *Parser) Parse() ast.Node {
-	return p.parsePipeline()
+	return p.parseBlock()
+}
+
+//{stmt ; stmt ; stmt;} 
+func (p *Parser) parseBlock() *ast.BlockNode {
+    block := &ast.BlockNode{Statements: []ast.Node{}}
+
+    for p.curToken.Type != token.EOF &&
+		p.curToken.Type != token.FI &&
+		p.curToken.Type != token.ELSE &&
+		p.curToken.Type != token.THEN {
+
+		stmt := p.parsePipeline()
+		if stmt != nil {
+			block.Statements = append(block.Statements, stmt)
+		}
+
+		if p.curToken.Type == token.SEMICOLON || p.curToken.Type == token.NEWLINE {
+			p.nextToken()
+		}
+	}
+	return block
 }
 
 // parsePipeline handles "cmd | cmd | cmd"
@@ -43,10 +64,18 @@ func (p *Parser) parsePipeline() ast.Node {
 }
 
 func (p *Parser) parseCommand() ast.Node {
+    if p.curToken.Type == token.IF {
+        return p.parseIf()
+    }
     cmd := &ast.CommandNode{Args: []string{}} 
     var result ast.Node = cmd
 
-    for p.curToken.Type != token.EOF && p.curToken.Type != token.PIPE {
+    for p.curToken.Type != token.EOF && 
+        p.curToken.Type != token.PIPE && 
+        p.curToken.Type != token.SEMICOLON &&
+        p.curToken.Type != token.THEN &&  
+        p.curToken.Type != token.ELSE &&  
+        p.curToken.Type != token.FI {    
         if p.curToken.Type == token.REDIRECT {
             op := p.curToken.Literal
             p.nextToken()
@@ -74,4 +103,34 @@ func (p *Parser) parseCommand() ast.Node {
         }
     }
     return result
+}
+
+func (p *Parser) parseIf() ast.Node {
+    p.nextToken() // consume 'if'
+    condition := p.parseBlock()
+
+    if p.curToken.Type != token.THEN {
+        return nil
+    }
+    p.nextToken() // consume 'then'
+    consequence := p.parseBlock()
+
+    var alternative ast.Node = nil
+
+    // Check if we hit an 'ELSE' before 'FI'
+    if p.curToken.Type == token.ELSE {
+        p.nextToken() // consume 'else'
+        alternative = p.parseBlock()
+    }
+
+    if p.curToken.Type != token.FI {
+        return nil
+    }
+    p.nextToken() // consume 'fi'
+
+    return &ast.IfNode{
+        Condition: condition, 
+        Then:      consequence, 
+        Else:      alternative,
+    }
 }

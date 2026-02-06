@@ -14,6 +14,13 @@ import (
 
 func Execute(node ast.Node, reg *commands.Registry, stdin io.Reader, stdout, stderr io.Writer) error {
 	switch n := node.(type) {
+	case *ast.BlockNode :
+		for _,stmt := range n.Statements {
+			if err := Execute(stmt,reg,stdin,stdout,stderr); err != nil {
+				// break
+			}
+		}
+		return nil
 	case *ast.PipeNode:
 		// Create pipe
 		r, w, err := os.Pipe()
@@ -44,6 +51,17 @@ func Execute(node ast.Node, reg *commands.Registry, stdin io.Reader, stdout, std
 			return nil
 		}
 		return executeCommand(n.Args, reg, stdin, stdout, stderr)
+	case *ast.IfNode:
+		err := Execute(n.Condition, reg, stdin, stdout, stderr)
+		
+		if err == nil {
+			return Execute(n.Then, reg, stdin, stdout, stderr)
+		} else {
+			if n.Else != nil {
+				return Execute(n.Else, reg, stdin, stdout, stderr)
+			}
+		}
+		return nil
 	}
 	return nil
 }

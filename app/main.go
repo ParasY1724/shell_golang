@@ -51,7 +51,6 @@ func main() {
 		var line strings.Builder
 		tabCount := 0
 
-		// --- INPUT LOOP (Preserved Exact Behaviour) ---
 		for {
 			ch, err := reader.ReadByte()
 			if err != nil {
@@ -145,19 +144,18 @@ func main() {
 
 		registry.History.Add(cmdLine)
 
-		// --- NEW ARCHITECTURE ---
-		// 1. Lexing
+		// Lexing
 		l := lexer.New(cmdLine)
 		
-		// 2. Parsing (Build AST)
+		// Parsing (Build AST)
 		p := parser.New(l)
 		program := p.Parse()
 
-		// 3. Execution (Recursively Walk AST)
+		// Execution (Recursively Walk AST)
 		if program != nil {
 			err := executor.Execute(program, registry, os.Stdin, os.Stdout, os.Stderr)
 			if err != nil {
-				// Errors are printed inside executor or builtins usually
+				continue
 			}
 		}
 

@@ -22,6 +22,16 @@ type RedirectNode struct {
 	Fd       int    // 1 for stdout, 2 for stderr
 }
 
+type IfNode struct {
+	Condition Node
+	Then Node
+	Else Node
+}
+
+type BlockNode struct {
+	Statements []Node
+}
+
 func (c *CommandNode) String() string {
 	return strings.Join(c.Args, " ")
 }
@@ -33,3 +43,6 @@ func (p *PipeNode) String() string {
 func (r *RedirectNode) String() string {
 	return " " + r.Type + " " + r.Location
 }
+
+func (i *IfNode) String() string { return "IF" }
+func (b *BlockNode) String() string { return "BLOCK" }
