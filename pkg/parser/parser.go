@@ -43,43 +43,35 @@ func (p *Parser) parsePipeline() ast.Node {
 }
 
 func (p *Parser) parseCommand() ast.Node {
-	cmd := &ast.CommandNode{Args: []string{}}
-	
-	var result ast.Node = cmd
+    cmd := &ast.CommandNode{Args: []string{}} 
+    var result ast.Node = cmd
 
-	for p.curToken.Type != token.EOF && p.curToken.Type != token.PIPE {
-		if p.curToken.Type == token.REDIRECT {
-			op := p.curToken.Literal
-			p.nextToken()
+    for p.curToken.Type != token.EOF && p.curToken.Type != token.PIPE {
+        if p.curToken.Type == token.REDIRECT {
+            op := p.curToken.Literal
+            p.nextToken()
 
-			// Next token MUST be the filename (WORD)
-			if p.curToken.Type != token.WORD {
-				// Syntax error, ignore for now or return current
-				return result
-			}
-			filename := p.curToken.Literal
-			p.nextToken()
+            if p.curToken.Type != token.WORD {
+                return result
+            }
+            filename := p.curToken.Literal
+            p.nextToken()
 
-			fd := 1 // Default stdout
-			if strings.HasPrefix(op, "2") {
-				fd = 2
-			} else if strings.HasPrefix(op, "1") {
-				fd = 1
-			}
+            fd := 1
+            if strings.HasPrefix(op, "2") {
+                fd = 2
+            }
 
-			result = &ast.RedirectNode{
-				Stmt:     result,
-				Location: filename,
-				Type:     op, 
-				Fd:       fd,
-			}
-		} else {
-			if c, ok := result.(*ast.CommandNode); ok {
-				c.Args = append(c.Args, p.curToken.Literal)
-			}
-			p.nextToken()
-		}
-	}
-	
-	return result
+            result = &ast.RedirectNode{
+                Stmt:     result,
+                Location: filename,
+                Type:     op,
+                Fd:       fd,
+            }
+        } else {
+            cmd.Args = append(cmd.Args, p.curToken.Literal)
+            p.nextToken()
+        }
+    }
+    return result
 }

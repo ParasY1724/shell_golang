@@ -49,9 +49,19 @@ func Execute(node ast.Node, reg *commands.Registry, stdin io.Reader, stdout, std
 }
 
 func executeRedirect(node *ast.RedirectNode, reg *commands.Registry, stdin io.Reader, stdout, stderr io.Writer) error {
-	flags := os.O_CREATE | os.O_WRONLY
-	// Check append mode based on type (>> or 1>> or 2>>)
-	if strings.HasSuffix(node.Type, ">>") {
+    if node.Type == "<" { //If a user runs cat < input.txt, previous code will try to open input.txt for writing and truncate it!
+        f, err := os.Open(node.Location)
+        if err != nil {
+            fmt.Fprintf(stderr, "error opening file: %v\n", err)
+            return err
+        }
+        defer f.Close()
+        return Execute(node.Stmt, reg, f, stdout, stderr)
+    }
+
+    // Existing logic for >, >>, 2>, etc.
+    flags := os.O_CREATE | os.O_WRONLY
+    if strings.HasSuffix(node.Type, ">>") {
         flags |= os.O_APPEND
     } else {
         flags |= os.O_TRUNC
