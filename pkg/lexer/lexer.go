@@ -119,13 +119,10 @@ func (l *Lexer) readWord() string {
 		ch := l.ch
 
 		if !inSingle && !inDouble && !escaped {
-			if ch == ' ' || ch == '\t' || ch == '|' {
-				break
-			}
-
-			if ch == '>' || ch == '<' {
-				break
-			}
+			//if delimeter , complete the word eg echo hello; ls --> break at hello
+			if token.IsDelimiter(ch) {
+                break
+            }
 		}
 
 		if escaped {

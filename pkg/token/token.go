@@ -43,3 +43,14 @@ func LookupIdent(ident string) TokenType {
 	}
 	return WORD
 }
+
+func IsDelimiter(ch byte) bool {
+	return (ch == ' ' ||
+		ch == '\t' ||
+		ch == '|' ||
+		ch == ';' ||
+		ch == '>' ||
+		ch == '<' ||
+		ch == '\n' ||
+		ch == '\r')
+}
