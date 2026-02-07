@@ -39,7 +39,7 @@ func (p *Parser) parseBlock() *ast.BlockNode {
 		p.curToken.Type != token.ELSE &&
 		p.curToken.Type != token.THEN {
 
-		stmt := p.parsePipeline()
+		stmt := p.parseLogical()
 		if stmt != nil {
 			block.Statements = append(block.Statements, stmt)
 		}
@@ -49,6 +49,23 @@ func (p *Parser) parseBlock() *ast.BlockNode {
 		}
 	}
 	return block
+}
+
+func (p *Parser) parseLogical() ast.Node {
+    left := p.parsePipeline()
+
+    for p.curToken.Type == token.AND || p.curToken.Type == token.OR {
+        operator := p.curToken.Literal
+        p.nextToken()
+        right := p.parsePipeline()
+        
+        left = &ast.BinaryNode{
+            Left:     left,
+            Operator: operator,
+            Right:    right,
+        }
+    }
+    return left
 }
 
 // parsePipeline handles "cmd | cmd | cmd"
@@ -75,7 +92,9 @@ func (p *Parser) parseCommand() ast.Node {
         p.curToken.Type != token.SEMICOLON &&
         p.curToken.Type != token.THEN &&  
         p.curToken.Type != token.ELSE &&  
-        p.curToken.Type != token.FI {    
+        p.curToken.Type != token.FI &&
+        p.curToken.Type != token.AND &&
+        p.curToken.Type != token.OR  {    
         if p.curToken.Type == token.REDIRECT {
             op := p.curToken.Literal
             p.nextToken()

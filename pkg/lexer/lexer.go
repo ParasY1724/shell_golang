@@ -47,12 +47,33 @@ func (l *Lexer) NextToken() token.Token {
 		return tok
 	}
 
-	// Handle Pipe
-	if l.ch == '|' {
-		tok = token.Token{Type: token.PIPE, Literal: "|"}
-		l.readChar()
-		return tok
-	}
+	// Handle AND (&&)
+    if l.ch == '&' {
+        if l.peekChar() == '&' {
+            ch := l.ch
+            l.readChar()
+            literal := string(ch) + string(l.ch)
+            tok = token.Token{Type: token.AND, Literal: literal}
+            l.readChar()
+            return tok
+        }
+    }
+
+    // Handle OR (||) and PIPE (|)
+    if l.ch == '|' {
+        if l.peekChar() == '|' {
+            ch := l.ch
+            l.readChar()
+            literal := string(ch) + string(l.ch)
+            tok = token.Token{Type: token.OR, Literal: literal}
+            l.readChar()
+            return tok
+        } else {
+            tok = token.Token{Type: token.PIPE, Literal: "|"}
+            l.readChar()
+            return tok
+        }
+    }
 
 	if l.ch == ';' {
 		tok = token.Token{Type: token.SEMICOLON, Literal: ";"}

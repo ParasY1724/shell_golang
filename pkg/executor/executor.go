@@ -62,6 +62,20 @@ func Execute(node ast.Node, reg *commands.Registry, stdin io.Reader, stdout, std
 			}
 		}
 		return nil
+	case *ast.BinaryNode:
+        err := Execute(n.Left, reg, stdin, stdout, stderr)
+        
+        if n.Operator == "&&" {
+            if err == nil {
+                return Execute(n.Right, reg, stdin, stdout, stderr)
+            }
+            return err
+        } else if n.Operator == "||" {
+            if err != nil {
+                return Execute(n.Right, reg, stdin, stdout, stderr)
+            }
+            return nil
+        }
 	}
 	return nil
 }

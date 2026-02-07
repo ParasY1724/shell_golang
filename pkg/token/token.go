@@ -19,6 +19,9 @@ const (
 	FI    = "fi"
 
 	NEWLINE = "NEWLINE"
+
+	AND       = "&&"
+    OR        = "||"
 )
 
 var keywords = map[string]TokenType{

@@ -32,6 +32,12 @@ type BlockNode struct {
 	Statements []Node
 }
 
+type BinaryNode struct {
+    Left     Node
+    Operator string // "&&" or "||"
+    Right    Node
+}
+
 func (c *CommandNode) String() string {
 	return strings.Join(c.Args, " ")
 }
@@ -46,3 +52,4 @@ func (r *RedirectNode) String() string {
 
 func (i *IfNode) String() string { return "IF" }
 func (b *BlockNode) String() string { return "BLOCK" }
+func (b *BinaryNode) String() string { return b.Operator }
