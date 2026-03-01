@@ -121,7 +121,7 @@ func (r *Registry) Suggest(prefix string) ([]string, bool) {
 func (r *Registry) registerBuiltins() {
 	add := func(name string, fn CmdFunc) {
 		r.Builtins[name] = fn
-		r.CmdTrie.Insert(name)
+		r.CmdTrie.Insert(name + " ")
 	}
 
 	add("exit", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
