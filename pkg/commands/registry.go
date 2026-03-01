@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 
 	"github.com/codecrafters-io/shell-starter-go/pkg/history"
@@ -112,10 +111,9 @@ func (r *Registry) Suggest(prefix string) ([]string, bool) {
 	candidates := r.CmdTrie.SearchPrefix(prefix)
 
 	if len(candidates) == 0 {
-		return []string{""}, false
+		return []string{}, false
 	}
 
-	sort.Strings(candidates)
 
 	return candidates, true
 }
@@ -235,4 +233,50 @@ func (r *Registry) registerBuiltins() {
 		}
 	})
 
+}
+
+func (r *Registry) SuggestFilename(token string) ([]string, bool) {
+	var searchDir, prefix string
+	var isLocal bool
+
+	lastSlash := strings.LastIndex(token, "/")
+	if lastSlash != -1 {
+		searchDir = token[:lastSlash+1] // Includes the trailing '/' (e.g., "path/to/")
+		prefix = token[lastSlash+1:]    // Everything after the '/'
+	} else {
+		searchDir = "."
+		prefix = token
+		isLocal = true
+	}
+
+	entries, err := os.ReadDir(searchDir)
+	if err != nil {
+		return nil, false 
+	}
+
+	var candidates []string
+
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), prefix) {
+			
+			var match string
+			if isLocal {
+				match = entry.Name()
+			} else {
+				match = searchDir + entry.Name()
+			}
+
+			if entry.IsDir() {
+				candidates = append(candidates, match+"/")
+			} else {
+				candidates = append(candidates, match+" ")
+			}
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil, false
+	}
+
+	return candidates, true
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -68,16 +69,18 @@ func main() {
 				lastWord := parts[len(parts)-1]
 
 				if len(lastWord) > 0 {
-					suggestion, found := registry.Suggest(lastWord)
-					if found && len(suggestion) > 0 {
+					cmdSugg, _ := registry.Suggest(lastWord)
+					fileSugg, _ := registry.SuggestFilename(lastWord)
+					suggestion := append(cmdSugg, fileSugg...)
+					sort.Strings(suggestion)
+					if len(suggestion) > 0 {
 						lcp := utils.FindLeastPrefix(suggestion)
 						if len(lcp) > len(lastWord) {
 							suffix := lcp[len(lastWord):]
 							line.WriteString(suffix)
 							fmt.Print(suffix)
 							tabCount = 0
-						}
-						if len(suggestion) == 1 {
+						}else if len(suggestion) == 1 {
 							line.WriteString(" ")
 							fmt.Print(" ")
 							tabCount = 0
