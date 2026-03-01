@@ -81,8 +81,7 @@ func main() {
 							fmt.Print(suffix)
 							tabCount = 0
 						}else if len(suggestion) == 1 {
-							line.WriteString(" ")
-							fmt.Print(" ")
+							fmt.Print("\x07")
 							tabCount = 0
 						} else {
 							if len(lcp) == len(lastWord) {
