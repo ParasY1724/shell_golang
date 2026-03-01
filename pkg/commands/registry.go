@@ -101,7 +101,7 @@ func (r *Registry) loadPathExecutables() {
 				continue
 			}
 			if info.Mode()&0111 != 0 {
-				r.CmdTrie.Insert(file.Name())
+				r.CmdTrie.Insert(file.Name()+" ")
 			}
 		}
 	}
