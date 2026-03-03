@@ -68,9 +68,19 @@ func main() {
 				parts := strings.Split(input, " ")
 				lastWord := parts[len(parts)-1]
 
-				cmdSugg, _ := registry.Suggest(lastWord)
-				fileSugg, _ := registry.SuggestFilename(lastWord)
-				suggestion := append(cmdSugg, fileSugg...)
+				var suggestion []string
+
+				// If it's the first word, suggest commands and files.
+				// Otherwise, we are typing arguments, so only suggest files.
+				if len(parts) == 1 {
+					cmdSugg, _ := registry.Suggest(lastWord)
+					fileSugg, _ := registry.SuggestFilename(lastWord)
+					suggestion = append(cmdSugg, fileSugg...)
+				} else {
+					fileSugg, _ := registry.SuggestFilename(lastWord)
+					suggestion = fileSugg
+				}
+				
 				sort.Strings(suggestion)
 				if len(suggestion) > 0 {
 					lcp := utils.FindLeastPrefix(suggestion)
