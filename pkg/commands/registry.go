@@ -94,6 +94,7 @@ func (r *Registry) loadPathExecutables() {
 
 		for _, file := range files {
 			if file.IsDir() {
+				r.CmdTrie.Insert(file.Name() + "/")
 				continue
 			}
 			info, err := file.Info()
@@ -101,7 +102,7 @@ func (r *Registry) loadPathExecutables() {
 				continue
 			}
 			if info.Mode()&0111 != 0 {
-				r.CmdTrie.Insert(file.Name()+" ")
+				r.CmdTrie.Insert(file.Name() + " ")
 			}
 		}
 	}
@@ -114,7 +115,6 @@ func (r *Registry) Suggest(prefix string) ([]string, bool) {
 		return []string{}, false
 	}
 
-
 	return candidates, true
 }
 
@@ -125,11 +125,11 @@ func (r *Registry) registerBuiltins() {
 	}
 
 	add("exit", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
-			r.ExitSignal = true
+		r.ExitSignal = true
 	})
 
 	add("echo", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
-		fmt.Fprintln(stdout,strings.Join(args, " "))
+		fmt.Fprintln(stdout, strings.Join(args, " "))
 	})
 
 	add("type", func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
@@ -219,17 +219,17 @@ func (r *Registry) registerBuiltins() {
 				path := args[1]
 				switch arg {
 				case "-r":
-					r.History.LoadFile(path,stderr)
+					r.History.LoadFile(path, stderr)
 				case "-w":
-					r.History.WriteFile(path,stderr)
+					r.History.WriteFile(path, stderr)
 				case "-a":
-					r.History.AppendNew(path,stderr)
+					r.History.AppendNew(path, stderr)
 				}
 				return
 			}
-			r.History.ReadHistory(arg,stdout,stderr)
+			r.History.ReadHistory(arg, stdout, stderr)
 		} else {
-			r.History.ReadHistory("",stdout,stderr)
+			r.History.ReadHistory("", stdout, stderr)
 		}
 	})
 
@@ -251,14 +251,14 @@ func (r *Registry) SuggestFilename(token string) ([]string, bool) {
 
 	entries, err := os.ReadDir(searchDir)
 	if err != nil {
-		return nil, false 
+		return nil, false
 	}
 
 	var candidates []string
 
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), prefix) {
-			
+
 			var match string
 			if isLocal {
 				match = entry.Name()
