@@ -233,6 +233,10 @@ func (r *Registry) registerBuiltins() {
 		}
 	})
 
+	add("jobs" , func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer){
+		//To Do : listing running background jobs
+	})
+
 }
 
 func (r *Registry) SuggestFilename(token string) ([]string, bool) {
