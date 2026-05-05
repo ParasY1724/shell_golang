@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-
 	"github.com/codecrafters-io/shell-starter-go/pkg/ast"
 	"github.com/codecrafters-io/shell-starter-go/pkg/commands"
 )
@@ -63,19 +62,44 @@ func Execute(node ast.Node, reg *commands.Registry, stdin io.Reader, stdout, std
 		}
 		return nil
 	case *ast.BinaryNode:
-        err := Execute(n.Left, reg, stdin, stdout, stderr)
-        
-        if n.Operator == "&&" {
-            if err == nil {
-                return Execute(n.Right, reg, stdin, stdout, stderr)
-            }
-            return err
-        } else if n.Operator == "||" {
-            if err != nil {
-                return Execute(n.Right, reg, stdin, stdout, stderr)
-            }
-            return nil
-        }
+		switch n.Operator {
+		case "&":
+			// Start the background work synchronously so [N] pid prints before the next prompt.
+			if cmdNode, ok := n.Left.(*ast.CommandNode); ok {
+				// Simple command: start process now, wait in goroutine
+				executeBackgroundCommand(cmdNode.Args, reg, stdin, stdout, stderr)
+			} else {
+				// Complex expression (e.g. "sleep 1 && echo done &"):
+				// register job and print notification now, run+cleanup in goroutine
+				bgNode := n.Left
+				jobID := reg.AddJob(0, bgNode.String())
+				fmt.Fprintf(stdout, "[%d] %d\n", jobID, 0)
+				go func() {
+					Execute(bgNode, reg, stdin, stdout, stderr)
+					reg.RemoveJob(jobID)
+				}()
+			}
+
+			// Run Right (the part after &) in foreground, if any
+			if n.Right != nil {
+				return Execute(n.Right, reg, stdin, stdout, stderr)
+			}
+			return nil
+
+		case "&&":
+			err := Execute(n.Left, reg, stdin, stdout, stderr)
+			if err == nil && n.Right != nil {
+				return Execute(n.Right, reg, stdin, stdout, stderr)
+			}
+			return err
+
+		case "||":
+			err := Execute(n.Left, reg, stdin, stdout, stderr)
+			if err != nil && n.Right != nil {
+				return Execute(n.Right, reg, stdin, stdout, stderr)
+			}
+			return nil
+		}
 	}
 	return nil
 }
@@ -131,6 +155,38 @@ func executeCommand(args []string, reg *commands.Registry, stdin io.Reader, stdo
 		cmd.Stdout = stdout
 		cmd.Stderr = stderr
 		return cmd.Run()
+	}
+
+	fmt.Fprintf(stderr, "%s: command not found\n", cmdName)
+	return fmt.Errorf("not found")
+}
+
+func executeBackgroundCommand(args []string, reg *commands.Registry, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(args) == 0 {
+		return nil
+	}
+	cmdName := args[0]
+	cmdArgs := args[1:]
+	cmdString := strings.Join(args, " ")
+
+	if _, err := exec.LookPath(cmdName); err == nil {
+		cmd := exec.Command(cmdName, cmdArgs...)
+		cmd.Stdin = stdin
+		cmd.Stdout = stdout
+		cmd.Stderr = stderr
+
+		if err := cmd.Start(); err != nil { 
+			return err
+		}
+
+		jobID := reg.AddJob(cmd.Process.Pid, cmdString)
+		fmt.Fprintf(stdout, "[%d] %d\n", jobID, cmd.Process.Pid)
+
+		go func() {
+			cmd.Wait()		// Wait in background to clean up zombies and deregister the job
+			reg.RemoveJob(jobID)
+		}()
+		return nil
 	}
 
 	fmt.Fprintf(stderr, "%s: command not found\n", cmdName)

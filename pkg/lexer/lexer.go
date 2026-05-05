@@ -47,17 +47,21 @@ func (l *Lexer) NextToken() token.Token {
 		return tok
 	}
 
-	// Handle AND (&&)
-    if l.ch == '&' {
-        if l.peekChar() == '&' {
-            ch := l.ch
-            l.readChar()
-            literal := string(ch) + string(l.ch)
-            tok = token.Token{Type: token.AND, Literal: literal}
-            l.readChar()
-            return tok
-        }
-    }
+	// Handle AND (&&) and BACKGROUND (&)
+	if l.ch == '&' {
+		if l.peekChar() == '&' {
+			ch := l.ch
+			l.readChar()
+			literal := string(ch) + string(l.ch)
+			tok = token.Token{Type: token.AND, Literal: literal}
+			l.readChar()
+			return tok
+		}
+		// Lone & — background operator (postfix)
+		tok = token.Token{Type: token.BACKGROUND, Literal: "&"}
+		l.readChar()
+		return tok
+	}
 
     // Handle OR (||) and PIPE (|)
     if l.ch == '|' {

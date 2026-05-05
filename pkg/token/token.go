@@ -22,6 +22,7 @@ const (
 
 	AND       = "&&"
     OR        = "||"
+	BACKGROUND = "&"
 )
 
 var keywords = map[string]TokenType{
@@ -52,5 +53,6 @@ func IsDelimiter(ch byte) bool {
 		ch == '>' ||
 		ch == '<' ||
 		ch == '\n' ||
+		ch == '&' ||
 		ch == '\r')
 }

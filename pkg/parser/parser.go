@@ -52,20 +52,42 @@ func (p *Parser) parseBlock() *ast.BlockNode {
 }
 
 func (p *Parser) parseLogical() ast.Node {
-    left := p.parsePipeline()
+	// Parse && / || chain first (higher precedence than &)
+	left := p.parseAndOr()
 
-    for p.curToken.Type == token.AND || p.curToken.Type == token.OR {
-        operator := p.curToken.Literal
-        p.nextToken()
-        right := p.parsePipeline()
-        
-        left = &ast.BinaryNode{
-            Left:     left,
-            Operator: operator,
-            Right:    right,
-        }
-    }
-    return left
+	// & is postfix with lowest precedence: wraps everything to its left
+	// "sleep 10 && echo hi &" -> BinaryNode{Left: (sleep10 && echo hi), Op: "&", Right: <next cmd or nil>}
+	if p.curToken.Type == token.BACKGROUND {
+		p.nextToken() // consume '&'
+		// There may be a follow-on command after '&' on the same line (e.g. "sleep 10 & echo hello")
+		var right ast.Node
+		if p.curToken.Type != token.EOF &&
+			p.curToken.Type != token.SEMICOLON &&
+			p.curToken.Type != token.FI &&
+			p.curToken.Type != token.ELSE &&
+			p.curToken.Type != token.THEN {
+			right = p.parseLogical()
+		}
+		return &ast.BinaryNode{Left: left, Operator: "&", Right: right}
+	}
+	return left
+}
+
+// parseAndOr handles && and || (higher precedence than &)
+func (p *Parser) parseAndOr() ast.Node {
+	left := p.parsePipeline()
+
+	for p.curToken.Type == token.AND || p.curToken.Type == token.OR {
+		operator := p.curToken.Literal
+		p.nextToken()
+		right := p.parsePipeline()
+		left = &ast.BinaryNode{
+			Left:     left,
+			Operator: operator,
+			Right:    right,
+		}
+	}
+	return left
 }
 
 // parsePipeline handles "cmd | cmd | cmd"
@@ -94,7 +116,8 @@ func (p *Parser) parseCommand() ast.Node {
         p.curToken.Type != token.ELSE &&  
         p.curToken.Type != token.FI &&
         p.curToken.Type != token.AND &&
-        p.curToken.Type != token.OR  {    
+        p.curToken.Type != token.OR &&
+        p.curToken.Type != token.BACKGROUND {    
         if p.curToken.Type == token.REDIRECT {
             op := p.curToken.Literal
             p.nextToken()

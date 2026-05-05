@@ -6,7 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-
+	"sync"
+	"sort"
 	"github.com/codecrafters-io/shell-starter-go/pkg/history"
 )
 
@@ -59,11 +60,22 @@ func (t *Trie) collect(node *TrieNode) []string {
 	return results
 }
 
+type Job struct {
+	ID      int
+	PID     int
+	Command string
+}
+
+
+
 type Registry struct {
 	Builtins   map[string]CmdFunc
 	CmdTrie    *Trie
 	History    *history.HistoryStruct
 	ExitSignal bool
+
+	Jobs      map[int]*Job
+	JobMutex  sync.Mutex
 }
 
 func NewRegistry() *Registry {
@@ -71,6 +83,7 @@ func NewRegistry() *Registry {
 		Builtins: make(map[string]CmdFunc),
 		CmdTrie:  NewTrie(),
 		History:  &history.HistoryStruct{},
+		Jobs:     make(map[int]*Job),
 	}
 	r.registerBuiltins()
 	r.loadPathExecutables()
@@ -234,7 +247,27 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	add("jobs" , func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer){
-		//To Do : listing running background jobs
+		r.JobMutex.Lock()
+		defer r.JobMutex.Unlock()
+		
+		// Sort job IDs for consistent output
+		var ids []int
+		for id := range r.Jobs {
+			ids = append(ids, id)
+		}
+		sort.Ints(ids)
+		
+		for i, id := range ids {
+			job := r.Jobs[id]
+			// Mimic formatting with `+` for the latest job and `-` for the previous
+			sign := " "
+			if i == len(ids)-1 {
+				sign = "+"
+			} else if i == len(ids)-2 {
+				sign = "-"
+			}
+			fmt.Fprintf(stdout, "[%d]%s  Running                 %s &\n", job.ID, sign, job.Command)
+		}
 	})
 
 }
@@ -283,4 +316,29 @@ func (r *Registry) SuggestFilename(token string) ([]string, bool) {
 	}
 
 	return candidates, true
+}
+
+
+
+func (r *Registry) AddJob(pid int, cmd string) int {
+	r.JobMutex.Lock()
+	defer r.JobMutex.Unlock()
+	
+	// Find the smallest available job ID starting from 1
+	id := 1
+	for {
+		if _, exists := r.Jobs[id]; !exists {
+			break
+		}
+		id++
+	}
+
+	r.Jobs[id] = &Job{ID: id, PID: pid, Command: cmd}
+	return id
+}
+
+func (r *Registry) RemoveJob(id int) {
+	r.JobMutex.Lock()
+	defer r.JobMutex.Unlock()
+	delete(r.Jobs, id)
 }
