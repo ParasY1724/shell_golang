@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"github.com/codecrafters-io/shell-starter-go/pkg/history"
 	"github.com/codecrafters-io/shell-starter-go/pkg/utils"
+
 )
 
 type CmdFunc func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
@@ -250,7 +251,12 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	add("jobs" , func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer){
-		r.ReapJobs(stdout)
+		// ReapJobs prints ALL jobs (Running+Done) when any are done, then removes Done ones.
+		// If nothing is done, we fall through and print Running jobs ourselves.
+		hadDone := r.reapJobsLocked(stdout)
+		if hadDone {
+			return
+		}
 
 		r.JobMutex.Lock()
 		defer r.JobMutex.Unlock()
@@ -340,9 +346,13 @@ func (r *Registry) RemoveJob(id int) {
 	delete(r.Jobs, id)
 }
 
-// ReapJobs non-blocking checks all background jobs.
-// Done jobs are printed then removed; Running jobs are left for the next `jobs` call.
 func (r *Registry) ReapJobs(stdout io.Writer) {
+	r.reapJobsLocked(stdout)
+}
+
+// When Done jobs exist, prints ALL jobs (Running+Done) in sorted order with markers,
+// then removes Done ones. When nothing is done, prints nothing and returns false.
+func (r *Registry) reapJobsLocked(stdout io.Writer) bool {
 	r.JobMutex.Lock()
 	defer r.JobMutex.Unlock()
 
@@ -353,7 +363,7 @@ func (r *Registry) ReapJobs(stdout io.Writer) {
 	sort.Ints(ids)
 	total := len(ids)
 
-	//determine which jobs are done
+	// Non-blocking poll for each job
 	doneSet := make(map[int]bool)
 	for _, id := range ids {
 		job := r.Jobs[id]
@@ -366,12 +376,22 @@ func (r *Registry) ReapJobs(stdout io.Writer) {
 		}
 	}
 
-	// Second pass: print Done jobs with markers based on position in full list, then remove
+	if len(doneSet) == 0 {
+		return false
+	}
+
 	for i, id := range ids {
+		job := r.Jobs[id]
+		sign := utils.MarkerForIndex(i, total)
 		if doneSet[id] {
-			sign := utils.MarkerForIndex(i, total)
-			fmt.Fprintf(stdout, "[%d]%s  Done                    %s\n", r.Jobs[id].ID, sign, r.Jobs[id].Command)
-			delete(r.Jobs, id)
+			fmt.Fprintf(stdout, "[%d]%s  Done                    %s\n", job.ID, sign, job.Command)
+		} else {
+			fmt.Fprintf(stdout, "[%d]%s  Running                 %s &\n", job.ID, sign, job.Command)
 		}
 	}
+
+	for id := range doneSet {
+		delete(r.Jobs, id)
+	}
+	return true
 }
