@@ -253,7 +253,7 @@ func (r *Registry) registerBuiltins() {
 	add("jobs" , func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer){
 		// ReapJobs prints ALL jobs (Running+Done) when any are done, then removes Done ones.
 		// If nothing is done, we fall through and print Running jobs ourselves.
-		hadDone := r.reapJobsLocked(stdout)
+		hadDone := r.reapJobsLocked(stdout,false)
 		if hadDone {
 			return
 		}
@@ -346,13 +346,13 @@ func (r *Registry) RemoveJob(id int) {
 	delete(r.Jobs, id)
 }
 
-func (r *Registry) ReapJobs(stdout io.Writer) {
-	r.reapJobsLocked(stdout)
+func (r *Registry) ReapJobs(stdout io.Writer , printDoneOnly bool) {
+	r.reapJobsLocked(stdout,printDoneOnly)
 }
 
 // When Done jobs exist, prints ALL jobs (Running+Done) in sorted order with markers,
 // then removes Done ones. When nothing is done, prints nothing and returns false.
-func (r *Registry) reapJobsLocked(stdout io.Writer) bool {
+func (r *Registry) reapJobsLocked(stdout io.Writer ,printDoneOnly bool) bool {
 	r.JobMutex.Lock()
 	defer r.JobMutex.Unlock()
 
@@ -385,7 +385,7 @@ func (r *Registry) reapJobsLocked(stdout io.Writer) bool {
 		sign := utils.MarkerForIndex(i, total)
 		if doneSet[id] {
 			fmt.Fprintf(stdout, "[%d]%s  Done                    %s\n", job.ID, sign, job.Command)
-		} else {
+		} else if (!printDoneOnly) {
 			fmt.Fprintf(stdout, "[%d]%s  Running                 %s &\n", job.ID, sign, job.Command)
 		}
 	}
