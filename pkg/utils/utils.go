@@ -36,3 +36,15 @@ func WriteHistory(cmdLine string){
 	}
 	writer.Flush()
 }
+
+func MarkerForIndex(i, total int) string {
+	if total == 0 {
+		return " "
+	}
+	if i == total-1 {
+		return "+"
+	} else if i == total-2 {
+		return "-"
+	}
+	return " "
+}

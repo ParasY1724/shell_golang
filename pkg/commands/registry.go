@@ -10,6 +10,7 @@ import (
 	"sort"
 	"syscall"
 	"github.com/codecrafters-io/shell-starter-go/pkg/history"
+	"github.com/codecrafters-io/shell-starter-go/pkg/utils"
 )
 
 type CmdFunc func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer)
@@ -253,21 +254,16 @@ func (r *Registry) registerBuiltins() {
 
 		r.JobMutex.Lock()
 		defer r.JobMutex.Unlock()
-		
+
 		var ids []int
 		for id := range r.Jobs {
 			ids = append(ids, id)
 		}
 		sort.Ints(ids)
-		
+
 		for i, id := range ids {
 			job := r.Jobs[id]
-			sign := " "
-			if i == len(ids)-1 {
-				sign = "+"
-			} else if i == len(ids)-2 {
-				sign = "-"
-			}
+			sign := utils.MarkerForIndex(i, len(ids))
 			fmt.Fprintf(stdout, "[%d]%s  Running                 %s &\n", job.ID, sign, job.Command)
 		}
 	})
@@ -344,7 +340,8 @@ func (r *Registry) RemoveJob(id int) {
 	delete(r.Jobs, id)
 }
 
-// ReapJobs non-blocking checks all background jobs; prints Done and removes finished ones.
+// ReapJobs non-blocking checks all background jobs.
+// Done jobs are printed then removed; Running jobs are left for the next `jobs` call.
 func (r *Registry) ReapJobs(stdout io.Writer) {
 	r.JobMutex.Lock()
 	defer r.JobMutex.Unlock()
@@ -354,29 +351,26 @@ func (r *Registry) ReapJobs(stdout io.Writer) {
 		ids = append(ids, id)
 	}
 	sort.Ints(ids)
-
 	total := len(ids)
-	for i, id := range ids {
-		job := r.Jobs[id]
 
-		done := false
+	//determine which jobs are done
+	doneSet := make(map[int]bool)
+	for _, id := range ids {
+		job := r.Jobs[id]
 		if job.Cmd != nil && job.PID > 0 {
-			// Non-blocking waitpid
 			var ws syscall.WaitStatus
 			wpid, err := syscall.Wait4(job.PID, &ws, syscall.WNOHANG, nil)
 			if err != nil || (wpid == job.PID && (ws.Exited() || ws.Signaled())) {
-				done = true
+				doneSet[id] = true
 			}
 		}
+	}
 
-		if done {
-			sign := " "
-			if i == total-1 {
-				sign = "+"
-			} else if i == total-2 {
-				sign = "-"
-			}
-			fmt.Fprintf(stdout, "[%d]%s  Done                    %s\n", job.ID, sign, job.Command)
+	// Second pass: print Done jobs with markers based on position in full list, then remove
+	for i, id := range ids {
+		if doneSet[id] {
+			sign := utils.MarkerForIndex(i, total)
+			fmt.Fprintf(stdout, "[%d]%s  Done                    %s\n", r.Jobs[id].ID, sign, r.Jobs[id].Command)
 			delete(r.Jobs, id)
 		}
 	}
