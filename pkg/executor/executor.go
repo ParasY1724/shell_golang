@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"syscall"
 	"github.com/codecrafters-io/shell-starter-go/pkg/ast"
 	"github.com/codecrafters-io/shell-starter-go/pkg/commands"
 )
@@ -72,7 +73,7 @@ func Execute(node ast.Node, reg *commands.Registry, stdin io.Reader, stdout, std
 				// Complex expression (e.g. "sleep 1 && echo done &"):
 				// register job and print notification now, run+cleanup in goroutine
 				bgNode := n.Left
-				jobID := reg.AddJob(0, bgNode.String())
+				jobID := reg.AddJob(0, bgNode.String(), nil)
 				fmt.Fprintf(stdout, "[%d] %d\n", jobID, 0)
 				go func() {
 					Execute(bgNode, reg, stdin, stdout, stderr)
@@ -174,18 +175,15 @@ func executeBackgroundCommand(args []string, reg *commands.Registry, stdin io.Re
 		cmd.Stdin = stdin
 		cmd.Stdout = stdout
 		cmd.Stderr = stderr
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true} // don't let SIGINT kill bg jobs
 
-		if err := cmd.Start(); err != nil { 
+		if err := cmd.Start(); err != nil {
 			return err
 		}
 
-		jobID := reg.AddJob(cmd.Process.Pid, cmdString)
+		// Register job with the actual *exec.Cmd so ReapJobs can poll it
+		jobID := reg.AddJob(cmd.Process.Pid, cmdString, cmd)
 		fmt.Fprintf(stdout, "[%d] %d\n", jobID, cmd.Process.Pid)
-
-		go func() {
-			cmd.Wait()		// Wait in background to clean up zombies and deregister the job
-			reg.RemoveJob(jobID)
-		}()
 		return nil
 	}
 

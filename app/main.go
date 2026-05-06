@@ -47,6 +47,7 @@ func main() {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
+		registry.ReapJobs(os.Stdout)
 		fmt.Print("$ ")
 
 		var line strings.Builder

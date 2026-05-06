@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"sort"
+	"syscall"
 	"github.com/codecrafters-io/shell-starter-go/pkg/history"
 )
 
@@ -64,6 +65,7 @@ type Job struct {
 	ID      int
 	PID     int
 	Command string
+	Cmd     *exec.Cmd // nil for complex/pipeline jobs
 }
 
 
@@ -247,10 +249,11 @@ func (r *Registry) registerBuiltins() {
 	})
 
 	add("jobs" , func(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer){
+		r.ReapJobs(stdout)
+
 		r.JobMutex.Lock()
 		defer r.JobMutex.Unlock()
 		
-		// Sort job IDs for consistent output
 		var ids []int
 		for id := range r.Jobs {
 			ids = append(ids, id)
@@ -259,7 +262,6 @@ func (r *Registry) registerBuiltins() {
 		
 		for i, id := range ids {
 			job := r.Jobs[id]
-			// Mimic formatting with `+` for the latest job and `-` for the previous
 			sign := " "
 			if i == len(ids)-1 {
 				sign = "+"
@@ -320,11 +322,10 @@ func (r *Registry) SuggestFilename(token string) ([]string, bool) {
 
 
 
-func (r *Registry) AddJob(pid int, cmd string) int {
+func (r *Registry) AddJob(pid int, cmd string, execCmd *exec.Cmd) int {
 	r.JobMutex.Lock()
 	defer r.JobMutex.Unlock()
 	
-	// Find the smallest available job ID starting from 1
 	id := 1
 	for {
 		if _, exists := r.Jobs[id]; !exists {
@@ -333,7 +334,7 @@ func (r *Registry) AddJob(pid int, cmd string) int {
 		id++
 	}
 
-	r.Jobs[id] = &Job{ID: id, PID: pid, Command: cmd}
+	r.Jobs[id] = &Job{ID: id, PID: pid, Command: cmd, Cmd: execCmd}
 	return id
 }
 
@@ -341,4 +342,42 @@ func (r *Registry) RemoveJob(id int) {
 	r.JobMutex.Lock()
 	defer r.JobMutex.Unlock()
 	delete(r.Jobs, id)
+}
+
+// ReapJobs non-blocking checks all background jobs; prints Done and removes finished ones.
+func (r *Registry) ReapJobs(stdout io.Writer) {
+	r.JobMutex.Lock()
+	defer r.JobMutex.Unlock()
+
+	var ids []int
+	for id := range r.Jobs {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+
+	total := len(ids)
+	for i, id := range ids {
+		job := r.Jobs[id]
+
+		done := false
+		if job.Cmd != nil && job.PID > 0 {
+			// Non-blocking waitpid
+			var ws syscall.WaitStatus
+			wpid, err := syscall.Wait4(job.PID, &ws, syscall.WNOHANG, nil)
+			if err != nil || (wpid == job.PID && (ws.Exited() || ws.Signaled())) {
+				done = true
+			}
+		}
+
+		if done {
+			sign := " "
+			if i == total-1 {
+				sign = "+"
+			} else if i == total-2 {
+				sign = "-"
+			}
+			fmt.Fprintf(stdout, "[%d]%s  Done                    %s\n", job.ID, sign, job.Command)
+			delete(r.Jobs, id)
+		}
+	}
 }
